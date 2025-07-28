@@ -104,7 +104,7 @@ export function AdminSidebar() {
               <div className="absolute -top-1 -right-1 h-3 w-3 bg-green-500 rounded-full border-2 border-white dark:border-gray-900"></div>
             </div>
             <div className="ml-3">
-              <h1 className="text-lg font-light text-gray-900 dark:text-white tracking-wide">
+              <h1 className="text-sm font-light text-gray-900 dark:text-white tracking-wide">
                 MR PHOTOGRAPHY
               </h1>
               <p className="text-xs text-gray-500 dark:text-gray-400">Admin Panel</p>
