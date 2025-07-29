@@ -1,4 +1,4 @@
-// File: /src/components/layout/MainLayout.tsx
+// File: /src/components/layout/ConditionalLayout.tsx
 
 "use client"
 
@@ -6,11 +6,11 @@ import { usePathname } from 'next/navigation'
 import { Header } from './Header'
 import { Footer } from './Footer'
 
-interface MainLayoutProps {
+interface ConditionalLayoutProps {
   children: React.ReactNode
 }
 
-export function MainLayout({ children }: MainLayoutProps) {
+export function ConditionalLayout({ children }: ConditionalLayoutProps) {
   const pathname = usePathname()
   
   // Check if current page is admin page
