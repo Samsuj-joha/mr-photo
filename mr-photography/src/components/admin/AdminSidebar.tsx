@@ -30,6 +30,13 @@ const navigation = [
     description: "Overview & Analytics"
   },
   { 
+    name: "Home Slider", 
+    href: "/admin/home-slider", 
+    icon: Camera,
+    badge: null,
+    description: "Manage Home Slider"
+  },
+  { 
     name: "Gallery", 
     href: "/admin/gallery", 
     icon: Images,
