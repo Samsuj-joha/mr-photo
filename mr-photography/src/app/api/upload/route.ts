@@ -1,219 +1,187 @@
-// Now replace your src/app/api/upload/route.ts with this working version
+// src/app/api/upload/route.ts
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { uploadImage } from "@/lib/cloudinary"
-import { db } from "@/lib/db"
 
 export async function POST(request: NextRequest) {
-  console.log("🚀 POST Upload API Hit!")
+  console.log("🚀 Upload API called")
   
   try {
-    console.log("📨 Step 1: Request received")
+    // Step 1: Check environment variables first
+    console.log("🔧 Checking environment variables...")
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME
+    const apiKey = process.env.CLOUDINARY_API_KEY
+    const apiSecret = process.env.CLOUDINARY_API_SECRET
     
-    // Step 1: Check session
-    console.log("🔐 Step 2: Checking session...")
-    const session = await getServerSession(authOptions)
-    console.log("Session result:", session ? "✅ Found" : "❌ Not found")
+    console.log("Environment check:", {
+      cloudName: cloudName ? "✅ Set" : "❌ Missing",
+      apiKey: apiKey ? "✅ Set" : "❌ Missing", 
+      apiSecret: apiSecret ? "✅ Set" : "❌ Missing"
+    })
     
-    if (!session) {
-      console.log("❌ No session - returning 401")
+    if (!cloudName || !apiKey || !apiSecret) {
+      console.log("❌ Missing Cloudinary environment variables")
       return NextResponse.json(
-        { error: "No session found" },
+        { 
+          error: "Server configuration error - missing Cloudinary credentials",
+          details: {
+            cloudName: !cloudName ? "missing" : "ok",
+            apiKey: !apiKey ? "missing" : "ok",
+            apiSecret: !apiSecret ? "missing" : "ok"
+          }
+        },
+        { status: 500 }
+      )
+    }
+    
+    // Step 2: Check authentication
+    console.log("🔐 Checking authentication...")
+    let session
+    try {
+      session = await getServerSession(authOptions)
+      console.log("Session:", session ? "✅ Valid" : "❌ None")
+    } catch (authError) {
+      console.log("❌ Auth error:", authError)
+      return NextResponse.json(
+        { error: "Authentication error", details: String(authError) },
+        { status: 500 }
+      )
+    }
+    
+    if (!session || session.user.role !== "ADMIN") {
+      console.log("❌ Unauthorized access")
+      return NextResponse.json(
+        { error: "Unauthorized - Admin access required" },
         { status: 401 }
       )
     }
     
-    if (session.user.role !== "ADMIN") {
-      console.log("❌ Not admin - returning 401")
+    // Step 3: Parse form data
+    console.log("📋 Parsing form data...")
+    let formData, file
+    try {
+      formData = await request.formData()
+      file = formData.get("file") as File
+      console.log("File received:", file ? `✅ ${file.name} (${file.size} bytes)` : "❌ No file")
+    } catch (parseError) {
+      console.log("❌ Form data parse error:", parseError)
       return NextResponse.json(
-        { error: "Not admin" },
-        { status: 401 }
+        { error: "Failed to parse form data", details: String(parseError) },
+        { status: 400 }
       )
     }
-    
-    // Step 2: Parse form data
-    console.log("📋 Step 3: Parsing form data...")
-    const formData = await request.formData()
-    const file = formData.get("file") as File
-    const galleryId = formData.get("galleryId") as string
-    const alt = formData.get("alt") as string || ""
-    const caption = formData.get("caption") as string || ""
-    
-    console.log("File info:", file ? {
-      name: file.name,
-      size: file.size,
-      type: file.type
-    } : "No file found")
-    console.log("Gallery ID:", galleryId || "Not provided (slider upload)")
     
     if (!file) {
-      console.log("❌ No file - returning 400")
       return NextResponse.json(
         { error: "No file provided" },
         { status: 400 }
       )
     }
     
-    // Validate file type
     if (!file.type.startsWith('image/')) {
-      console.log("❌ Invalid file type:", file.type)
       return NextResponse.json(
         { error: "File must be an image" },
         { status: 400 }
       )
     }
     
-    // Validate file size (10MB max)
-    const maxSize = 10 * 1024 * 1024
-    if (file.size > maxSize) {
-      console.log("❌ File too large:", file.size)
-      return NextResponse.json(
-        { error: "File size must be less than 10MB" },
-        { status: 400 }
-      )
-    }
+    // Step 4: Simple Cloudinary upload without external function
+    console.log("☁️ Uploading to Cloudinary...")
     
-    console.log("✅ File validation passed")
-    
-    // Step 3: Determine upload type and folder
-    let uploadFolder = 'mr-photography'
-    
-    if (galleryId) {
-      console.log("🖼️ Gallery upload detected, checking gallery...")
-      
-      try {
-        const gallery = await db.gallery.findUnique({
-          where: { id: galleryId }
-        })
-
-        if (!gallery) {
-          console.log("❌ Gallery not found:", galleryId)
-          return NextResponse.json(
-            { error: "Gallery not found" },
-            { status: 404 }
-          )
-        }
-        
-        uploadFolder = `mr-photography/galleries/${galleryId}`
-        console.log("✅ Gallery found, upload folder:", uploadFolder)
-      } catch (dbError) {
-        console.log("❌ Database error checking gallery:", dbError)
-        return NextResponse.json(
-          { error: "Database error" },
-          { status: 500 }
-        )
-      }
-    } else {
-      uploadFolder = 'mr-photography/home-slider'
-      console.log("🏠 Slider upload detected, upload folder:", uploadFolder)
-    }
-    
-    // Step 4: Upload to Cloudinary
-    console.log("☁️ Step 4: Starting Cloudinary upload...")
-    
-    let uploadResult
     try {
-      uploadResult = await uploadImage(file, uploadFolder) as any
-      console.log("✅ Cloudinary upload successful:", {
-        url: uploadResult.secure_url,
-        public_id: uploadResult.public_id,
-        width: uploadResult.width,
-        height: uploadResult.height
-      })
-    } catch (cloudinaryError) {
-      console.log("❌ Cloudinary upload failed:", cloudinaryError)
-      return NextResponse.json(
-        { error: `Cloudinary upload failed: ${cloudinaryError instanceof Error ? cloudinaryError.message : 'Unknown error'}` },
-        { status: 500 }
-      )
-    }
-    
-    if (!uploadResult) {
-      console.log("❌ No upload result from Cloudinary")
-      return NextResponse.json(
-        { error: "Failed to upload image" },
-        { status: 500 }
-      )
-    }
-    
-    // Step 5: Handle different upload types
-    if (galleryId) {
-      console.log("💾 Step 5: Saving gallery image to database...")
+      // Dynamic import to avoid module loading issues
+      const { v2: cloudinary } = await import('cloudinary')
       
-      try {
-        // Get the current highest order in the gallery
-        const lastImage = await db.galleryImage.findFirst({
-          where: { galleryId },
-          orderBy: { order: 'desc' }
-        })
-
-        const nextOrder = lastImage ? lastImage.order + 1 : 0
-
-        // Save to database
-        const galleryImage = await db.galleryImage.create({
-          data: {
-            url: uploadResult.secure_url,
-            publicId: uploadResult.public_id,
-            alt,
-            caption,
-            order: nextOrder,
-            galleryId,
+      // Configure here to ensure it's set
+      cloudinary.config({
+        cloud_name: cloudName,
+        api_key: apiKey,
+        api_secret: apiSecret,
+        secure: true
+      })
+      
+      const arrayBuffer = await file.arrayBuffer()
+      const buffer = Buffer.from(arrayBuffer)
+      
+      const uploadResult = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          {
+            folder: 'mr-photography/uploads',
+            resource_type: 'auto',
+            transformation: [
+              { quality: 'auto:best' },
+              { fetch_format: 'auto' }
+            ]
+          },
+          (error, result) => {
+            if (error) {
+              console.log('❌ Cloudinary error:', error)
+              reject(error)
+            } else {
+              console.log('✅ Cloudinary success:', result?.public_id)
+              resolve(result)
+            }
           }
-        })
-
-        console.log("✅ Gallery image saved to database")
-        
-        return NextResponse.json({
-          id: galleryImage.id,
-          url: galleryImage.url,
-          publicId: galleryImage.publicId,
-          alt: galleryImage.alt,
-          caption: galleryImage.caption,
-          order: galleryImage.order,
-          galleryId: galleryImage.galleryId,
-          createdAt: galleryImage.createdAt,
-        }, { status: 201 })
-      } catch (dbError) {
-        console.log("❌ Database error saving gallery image:", dbError)
-        return NextResponse.json(
-          { error: "Database error saving image" },
-          { status: 500 }
-        )
-      }
-    } else {
-      console.log("🏠 Step 5: Returning slider upload result")
+        ).end(buffer)
+      }) as any
+      
+      console.log("📤 Upload completed successfully")
       
       return NextResponse.json({
+        success: true,
         url: uploadResult.secure_url,
         public_id: uploadResult.public_id,
         width: uploadResult.width,
         height: uploadResult.height,
         bytes: uploadResult.bytes,
         format: uploadResult.format,
-        message: "Image uploaded successfully to Cloudinary"
+        uploadDetails: {
+          size: file.size,
+          sizeInMB: (file.size / (1024 * 1024)).toFixed(2),
+          dimensions: `${uploadResult.width}x${uploadResult.height}`,
+          format: uploadResult.format
+        },
+        message: "Upload successful"
       })
+      
+    } catch (cloudinaryError) {
+      console.log("❌ Cloudinary upload failed:", cloudinaryError)
+      return NextResponse.json(
+        { 
+          error: "Cloudinary upload failed", 
+          details: cloudinaryError instanceof Error ? cloudinaryError.message : String(cloudinaryError)
+        },
+        { status: 500 }
+      )
     }
     
   } catch (error) {
-    console.log("💥 Unexpected error in upload API:", error)
-    console.log("Error details:", {
-      name: error instanceof Error ? error.name : 'Unknown',
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack?.slice(0, 500) : 'No stack'
-    })
-    
+    console.log("💥 Unexpected error:", error)
     return NextResponse.json(
-      { error: "Internal server error" },
+      { 
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack?.slice(0, 500) : undefined
+      },
       { status: 500 }
     )
   }
 }
 
 export async function GET() {
-  console.log("🚀 GET Upload API Hit!")
+  console.log("🚀 GET Upload API test")
+  
+  // Test environment variables
+  const envCheck = {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME ? "✅ Set" : "❌ Missing",
+    apiKey: process.env.CLOUDINARY_API_KEY ? "✅ Set" : "❌ Missing",
+    apiSecret: process.env.CLOUDINARY_API_SECRET ? "✅ Set" : "❌ Missing"
+  }
+  
   return NextResponse.json({
     message: "Upload API is running",
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    environment: envCheck,
+    status: "OK"
   })
 }

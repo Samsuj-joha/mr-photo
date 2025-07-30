@@ -1,92 +1,78 @@
-// File: /src/lib/cloudinary.ts
-
+// src/lib/cloudinary.ts
 import { v2 as cloudinary } from 'cloudinary'
 
-// Check if environment variables are set
-if (!process.env.CLOUDINARY_CLOUD_NAME) {
-  throw new Error('CLOUDINARY_CLOUD_NAME is not set in environment variables')
-}
-if (!process.env.CLOUDINARY_API_KEY) {
-  throw new Error('CLOUDINARY_API_KEY is not set in environment variables')
-}
-if (!process.env.CLOUDINARY_API_SECRET) {
-  throw new Error('CLOUDINARY_API_SECRET is not set in environment variables')
-}
-
-// Configure Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
+  secure: true,
 })
 
-console.log('Cloudinary configured with cloud_name:', process.env.CLOUDINARY_CLOUD_NAME)
-
-// Upload image function
-export async function uploadImage(file: File, folder?: string) {
+export async function uploadImage(file: File, folder: string = 'mr-photography') {
   try {
-    console.log('Starting upload process...')
-    console.log('File details:', { name: file.name, size: file.size, type: file.type })
-
-    // Convert file to base64
-    const bytes = await file.arrayBuffer()
-    const buffer = Buffer.from(bytes)
-    const base64 = buffer.toString('base64')
-    const dataURI = `data:${file.type};base64,${base64}`
-
-    console.log('File converted to base64, length:', base64.length)
-
-    // Upload to Cloudinary
-    console.log('Uploading to Cloudinary...')
-    const result = await cloudinary.uploader.upload(dataURI, {
-      folder: folder || 'mr-photography',
-      resource_type: 'auto',
-      quality: 'auto:good',
-      // Removed format: 'auto' - this causes "Invalid extension" error
+    console.log(`🔄 Starting upload for ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`)
+    
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+    
+    return new Promise((resolve, reject) => {
+      cloudinary.uploader.upload_stream(
+        {
+          folder: folder,
+          resource_type: 'auto',
+          transformation: [
+            // Auto-optimize for web delivery
+            { quality: 'auto:best' },
+            { fetch_format: 'auto' }
+          ],
+          // Extended timeout for large files
+          timeout: 300000, // 5 minutes
+          // Allow large files
+          chunk_size: 6000000, // 6MB chunks for large file uploads
+          eager: [
+            // Generate optimized versions
+            { width: 1920, height: 1080, crop: 'limit', quality: 'auto:good' },
+            { width: 800, height: 600, crop: 'limit', quality: 'auto:good' }
+          ],
+          eager_async: true, // Process transformations in background
+        },
+        (error, result) => {
+          if (error) {
+            console.log('❌ Cloudinary upload error:', error)
+            reject(error)
+          } else {
+            console.log('✅ Cloudinary upload success:', result?.public_id)
+            resolve(result)
+          }
+        }
+      ).end(buffer)
     })
-
-    console.log('Cloudinary upload successful:', result.secure_url)
-    return result
-
   } catch (error) {
-    console.error('Detailed Cloudinary upload error:', error)
-    
-    // Log more specific error details
-    if (error instanceof Error) {
-      console.error('Error name:', error.name)
-      console.error('Error message:', error.message)
-      console.error('Error stack:', error.stack)
-    }
-    
-    throw new Error(`Cloudinary upload failed: ${error instanceof Error ? error.message : String(error)}`)
+    console.log('❌ Error in uploadImage function:', error)
+    throw error
   }
 }
 
-// Delete image function
 export async function deleteImage(publicId: string) {
   try {
+    console.log(`🗑️ Deleting image: ${publicId}`)
     const result = await cloudinary.uploader.destroy(publicId)
+    console.log('✅ Image deleted:', result)
     return result
   } catch (error) {
-    console.error('Error deleting from Cloudinary:', error)
-    throw new Error('Failed to delete image')
+    console.log('❌ Error deleting image:', error)
+    throw error
   }
 }
 
-// Get optimized image URL
-export function getOptimizedImageUrl(publicId: string, options?: {
-  width?: number
-  height?: number
-  crop?: string
-  quality?: string
-}) {
-  return cloudinary.url(publicId, {
-    width: options?.width,
-    height: options?.height,
-    crop: options?.crop || 'fill',
-    quality: options?.quality || 'auto:good',
-    // Removed format: 'auto' - this causes issues
-  })
+export async function getImageInfo(publicId: string) {
+  try {
+    const result = await cloudinary.api.resource(publicId)
+    return result
+  } catch (error) {
+    console.log('❌ Error getting image info:', error)
+    throw error
+  }
 }
 
-export default cloudinary
+export { cloudinary }

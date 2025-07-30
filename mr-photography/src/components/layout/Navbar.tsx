@@ -4,6 +4,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -70,8 +71,8 @@ const mainNavItems = [
         description: "Professional photography services I offer"
       },
       {
-        title: "Pricing",
-        href: "/pages/pricing",
+        title: "book",
+        href: "/pages/book",
         description: "Transparent pricing for all photography packages"
       },
     ]
@@ -123,20 +124,19 @@ export function Navbar() {
         <div className="flex h-16 lg:h-20 items-center justify-between">
           
           {/* Logo */}
-          <Link href="/" className="flex items-center space-x-3 group">
+          <Link href="/" className="flex items-center  group">
             <div className="relative">
-              <div className="w-10 h-10 lg:w-12 lg:h-12 bg-gradient-to-br from-gray-800 to-gray-600 dark:from-gray-200 dark:to-gray-400 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105">
-                <span className="text-white dark:text-gray-800 font-light text-sm lg:text-base tracking-wider">MR</span>
+              <div className="w-14 h-10 lg:w-22 lg:h-16 rounded-xl overflow-hidden transition-transform group-hover:scale-105 dark:bg-gray-100">
+                <Image
+                  src="/images/logo.png"
+                  alt="MR Photography Logo"
+                  width={100}
+                  height={60}
+                  className="object-cover w-full h-full"
+                  priority
+                />
               </div>
               <div className="absolute -top-1 -right-1 h-3 w-3 bg-green-500 rounded-full border-2 border-white dark:border-gray-900 animate-pulse"></div>
-            </div>
-            <div className="hidden sm:block">
-              <h1 className="text-xl lg:text-2xl font-light text-gray-900 dark:text-white tracking-wide">
-                MR PHOTOGRAPHY
-              </h1>
-              <p className="text-xs text-gray-500 dark:text-gray-400 tracking-wide">
-                Capturing Life's Moments
-              </p>
             </div>
           </Link>
 
@@ -277,8 +277,14 @@ export function Navbar() {
                   
                   {/* Mobile Logo */}
                   <div className="flex items-center space-x-3 pb-6 border-b border-gray-200 dark:border-gray-800">
-                    <div className="w-10 h-10 bg-gradient-to-br from-gray-800 to-gray-600 dark:from-gray-200 dark:to-gray-400 rounded-xl flex items-center justify-center">
-                      <span className="text-white dark:text-gray-800 font-light text-sm tracking-wider">MR</span>
+                    <div className="w-10 h-10 rounded-xl overflow-hidden">
+                      <Image
+                        src="/images/logo/logo.png"
+                        alt="MR Photography Logo"
+                        width={40}
+                        height={40}
+                        className="object-contain w-full h-full"
+                      />
                     </div>
                     <div>
                       <h1 className="text-lg font-light text-gray-900 dark:text-white tracking-wide">

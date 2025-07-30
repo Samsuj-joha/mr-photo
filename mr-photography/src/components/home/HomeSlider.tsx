@@ -1,4 +1,3 @@
-
 // src/components/home/HomeSlider.tsx
 "use client"
 
@@ -69,8 +68,8 @@ export function HomeSlider({
 
   if (isLoading || images.length === 0) {
     return (
-      <div className="relative w-full h-[70vh] bg-gray-200 dark:bg-gray-800 animate-pulse flex items-center justify-center">
-        <div className="text-gray-500 dark:text-gray-400">Loading slider...</div>
+      <div className="relative w-full h-[60vh] bg-gray-200 dark:bg-gray-800 animate-pulse flex items-center justify-center">
+        <div className="text-gray-500 dark:text-gray-400">Loading...</div>
       </div>
     )
   }
@@ -78,7 +77,7 @@ export function HomeSlider({
   const currentImage = images[currentIndex]
 
   return (
-    <div className="relative w-full h-[70vh] overflow-hidden group">
+    <div className="relative w-full h-[80vh] overflow-hidden group">
       {/* Main Image */}
       <div className="relative w-full h-full">
         <Image
@@ -91,7 +90,7 @@ export function HomeSlider({
         />
         
         {/* Overlay */}
-        <div className="absolute inset-0 bg-black/30" />
+        <div className="absolute inset-0 bg-black/20" />
         
         {/* Content Overlay */}
         {(currentImage.title || currentImage.description) && (
@@ -173,6 +172,18 @@ export function HomeSlider({
         >
           {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
         </Button>
+      )}
+
+      {/* Progress Bar (if auto-playing) */}
+      {isPlaying && images.length > 1 && (
+        <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
+          <div 
+            className="h-full bg-white transition-all duration-100 ease-linear"
+            style={{
+              width: `${((Date.now() % autoPlayInterval) / autoPlayInterval) * 100}%`
+            }}
+          />
+        </div>
       )}
     </div>
   )

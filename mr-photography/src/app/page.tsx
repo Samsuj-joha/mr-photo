@@ -1,4 +1,4 @@
-// src/app/page.tsx - Fixed version
+// src/app/page.tsx
 import { HomeSlider } from "@/components/home/HomeSlider"
 import { db } from "@/lib/db"
 
@@ -31,7 +31,7 @@ export default async function HomePage() {
 
       {/* Fallback when no images */}
       {sliderImages.length === 0 && (
-        <div className="flex items-center justify-center min-h-[70vh] bg-gray-100 dark:bg-gray-800">
+        <div className="flex items-center justify-center min-h-[50vh] bg-gray-100 dark:bg-gray-800">
           <div className="text-center">
             <h1 className="text-4xl font-light text-gray-900 dark:text-white mb-4">
               Welcome to MR Photography
