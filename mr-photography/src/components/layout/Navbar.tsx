@@ -7,7 +7,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -118,7 +118,8 @@ export function Navbar() {
           : "bg-transparent"
       )}
     >
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+      {/* CONSISTENT SPACING: Use same padding as main content area */}
+      <div className="container mx-auto px-6 sm:px-8 lg:px-10 xl:px-10 2xl:px-10">
         <div className="flex h-16 lg:h-20 items-center justify-between">
           
           {/* Logo */}
@@ -268,6 +269,10 @@ export function Navbar() {
                 </Button>
               </SheetTrigger>
               <SheetContent side="right" className="w-80 sm:w-96">
+                {/* Add proper accessibility structure */}
+                <SheetHeader className="sr-only">
+                  <SheetTitle>Navigation Menu</SheetTitle>
+                </SheetHeader>
                 <div className="flex flex-col space-y-6 mt-6">
                   
                   {/* Mobile Logo */}

@@ -3,7 +3,7 @@
 "use client"
 
 import { usePathname } from 'next/navigation'
-import { Header } from './Header'
+import { Navbar } from './Navbar'
 import { Footer } from './Footer'
 
 interface MainLayoutProps {
@@ -21,15 +21,17 @@ export function MainLayout({ children }: MainLayoutProps) {
     return <>{children}</>
   }
   
-  // For public pages, include Header and Footer
+  // For public pages, include Header and Footer with consistent spacing
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
-      <Header />
+      <Navbar />
       
-      {/* Main Content */}
+      {/* Main Content with CONSISTENT container spacing */}
       <main className="flex-1">
-        {children}
+        <div className="container mx-auto px-6 sm:px-8 lg:px-10 xl:px-10 2xl:px-10">
+          {children}
+        </div>
       </main>
       
       {/* Footer */}

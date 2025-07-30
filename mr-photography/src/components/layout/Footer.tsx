@@ -25,21 +25,21 @@ const footerNavigation = {
     { name: "Gallery", href: "/gallery" },
     { name: "Portfolio", href: "/portfolio" },
     { name: "Blog", href: "/blog" },
-    { name: "About", href: "/about" },
+    { name: "About", href: "/pages/about" },
     { name: "Contact", href: "/contact" },
   ],
   services: [
-    { name: "Wedding Photography", href: "/services#wedding" },
-    { name: "Portrait Sessions", href: "/services#portrait" },
-    { name: "Corporate Events", href: "/services#corporate" },
-    { name: "Fashion Photography", href: "/services#fashion" },
-    { name: "Nature Photography", href: "/services#nature" },
-    { name: "Photo Editing", href: "/services#editing" },
+    { name: "Wedding Photography", href: "/pages/services#wedding" },
+    { name: "Portrait Sessions", href: "/pages/services#portrait" },
+    { name: "Corporate Events", href: "/pages/services#corporate" },
+    { name: "Fashion Photography", href: "/pages/services#fashion" },
+    { name: "Nature Photography", href: "/pages/services#nature" },
+    { name: "Photo Editing", href: "/pages/services#editing" },
   ],
   company: [
-    { name: "About Us", href: "/about" },
-    { name: "Our Story", href: "/about#story" },
-    { name: "Pricing", href: "/pricing" },
+    { name: "About Us", href: "/pages/about" },
+    { name: "Our Story", href: "/pages/about#story" },
+    { name: "Pricing", href: "/pages/pricing" },
     { name: "Features", href: "/features" },
     { name: "Buy Prints", href: "/buy" },
     { name: "Terms & Privacy", href: "/terms" },
@@ -84,7 +84,8 @@ export function Footer() {
 
   return (
     <footer className="bg-gray-900 text-white">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+      {/* CONSISTENT SPACING: Use same padding as main content area */}
+      <div className="container mx-auto px-6 sm:px-8 lg:px-10 xl:px-10 2xl:px-10">
         
         {/* Main Footer Content */}
         <div className="py-16">
