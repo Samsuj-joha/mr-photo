@@ -343,7 +343,7 @@ export function Footer() {
   }
 
   return (
-    <footer className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white border-t border-gray-200 dark:border-gray-800 mt-[-145px]">
+    <footer className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white border-t border-gray-200 dark:border-gray-800 ">
       {/* CONSISTENT SPACING: Use same padding as main content area */}
       <div className="container mx-auto px-6 sm:px-8 lg:px-10 xl:px-10 2xl:px-10">
         

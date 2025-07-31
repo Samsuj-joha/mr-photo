@@ -1,4 +1,4 @@
-// src/app/api/gallery/images/route.ts
+// src/app/api/gallery/images/route.ts - UPDATED with pagination support
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 
@@ -25,7 +25,14 @@ export async function GET(request: NextRequest) {
       galleryWhere.country = country
     }
 
-    // Get all images from filtered galleries
+    // Get total count first
+    const totalCount = await db.galleryImage.count({
+      where: {
+        gallery: galleryWhere
+      }
+    })
+
+    // Get paginated images from filtered galleries
     const images = await db.galleryImage.findMany({
       where: {
         gallery: galleryWhere
@@ -45,11 +52,11 @@ export async function GET(request: NextRequest) {
       take: limit
     })
 
-    console.log(`✅ Found ${images.length} images`)
+    console.log(`✅ Found ${images.length} images (${totalCount} total)`)
 
     const formattedImages = images.map(image => ({
       id: image.id,
-      title: image.alt || image.caption || image.gallery.title,
+      title: image.alt || image.caption || image.gallery.title || "Untitled",
       imageUrl: image.url,
       category: image.gallery.category,
       country: image.gallery.country || "unknown",
@@ -58,7 +65,13 @@ export async function GET(request: NextRequest) {
       galleryTitle: image.gallery.title
     }))
 
-    return NextResponse.json(formattedImages)
+    return NextResponse.json({
+      images: formattedImages,
+      total: totalCount,
+      limit,
+      offset,
+      hasMore: offset + limit < totalCount
+    })
   } catch (error) {
     console.error("❌ Error fetching gallery images:", error)
     return NextResponse.json(
