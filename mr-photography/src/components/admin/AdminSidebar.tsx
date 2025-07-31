@@ -118,28 +118,6 @@ export function AdminSidebar() {
             </div>
           </div>
         </div>
-
-        {/* User Profile Section */}
-        <div className="flex items-center space-x-3 rounded-lg bg-gray-50 dark:bg-gray-800 p-3">
-          <Avatar className="h-10 w-10">
-            <AvatarImage src={session?.user?.image || ""} />
-            <AvatarFallback className="bg-blue-600 text-white">
-              {session?.user?.name?.charAt(0) || "A"}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-              {session?.user?.name || "Admin"}
-            </p>
-            <div className="flex items-center space-x-2">
-              <Badge variant="secondary" className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-                <Heart className="h-3 w-3 mr-1" />
-                Online
-              </Badge>
-            </div>
-          </div>
-        </div>
-
         {/* Navigation */}
         <nav className="flex flex-1 flex-col">
           <ul role="list" className="flex flex-1 flex-col gap-y-7">
