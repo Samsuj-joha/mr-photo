@@ -1,3 +1,4 @@
+// prisma/schema.prisma - COMPLETE VERSION with country and loves fields
 generator client {
   provider = "prisma-client-js"
 }
@@ -59,6 +60,7 @@ model Gallery {
   title       String
   description String?
   category    String
+  country     String?        // 🆕 ADDED: Country field for your form
   images      GalleryImage[]
   featured    Boolean        @default(false)
   published   Boolean        @default(true)
@@ -67,14 +69,15 @@ model Gallery {
 }
 
 model GalleryImage {
-  id        String  @id @default(cuid())
+  id        String   @id @default(cuid())
   url       String
   publicId  String
   alt       String?
   caption   String?
-  order     Int     @default(0)
+  order     Int      @default(0)
+  loves     Int      @default(0)  // 🆕 ADDED: Loves field for heart icon counting
   galleryId String
-  gallery   Gallery @relation(fields: [galleryId], references: [id], onDelete: Cascade)
+  gallery   Gallery  @relation(fields: [galleryId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 }
 
