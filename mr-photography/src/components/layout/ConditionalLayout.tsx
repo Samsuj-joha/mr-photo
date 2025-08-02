@@ -21,15 +21,15 @@ export function ConditionalLayout({ children }: ConditionalLayoutProps) {
     return <>{children}</>
   }
   
-  // For public pages, include Header and Footer with consistent spacing
+  // For public pages, include Header and Footer with wider spacing
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
       <Header />
       
-      {/* Main Content with consistent container spacing */}
+      {/* Main Content with WIDER container spacing for more horizontal space */}
       <main className="flex-1">
-        <div className="container mx-auto px-6 sm:px-8 lg:px-10 xl:px-10 2xl:px-10">
+        <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
           {children}
         </div>
       </main>

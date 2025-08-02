@@ -119,12 +119,12 @@ export function Navbar() {
           : "bg-transparent"
       )}
     >
-      {/* CONSISTENT SPACING: Use same padding as main content area */}
-      <div className="container mx-auto px-6 sm:px-8 lg:px-10 xl:px-10 2xl:px-10">
+      {/* WIDER SPACING: Match the new layout spacing */}
+      <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
         <div className="flex h-16 lg:h-20 items-center justify-between">
           
           {/* Logo */}
-          <Link href="/" className="flex items-center  group">
+          <Link href="/" className="flex items-center group">
             <div className="relative">
               <div className="w-14 h-10 lg:w-22 lg:h-16 rounded-xl overflow-hidden transition-transform group-hover:scale-105 dark:bg-gray-100">
                 <Image
