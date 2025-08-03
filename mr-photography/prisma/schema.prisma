@@ -1,4 +1,4 @@
-// prisma/schema.prisma - COMPLETE VERSION with country and loves fields
+// prisma/schema.prisma - COMPLETE VERSION
 generator client {
   provider = "prisma-client-js"
 }
@@ -60,7 +60,7 @@ model Gallery {
   title       String
   description String?
   category    String
-  country     String?        // 🆕 ADDED: Country field for your form
+  country     String?        // Country field for your form
   images      GalleryImage[]
   featured    Boolean        @default(false)
   published   Boolean        @default(true)
@@ -75,7 +75,7 @@ model GalleryImage {
   alt       String?
   caption   String?
   order     Int      @default(0)
-  loves     Int      @default(0)  // 🆕 ADDED: Loves field for heart icon counting
+  loves     Int      @default(0)  // Loves field for heart icon counting
   galleryId String
   gallery   Gallery  @relation(fields: [galleryId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
@@ -134,6 +134,29 @@ model HomeSlider {
   linkText    String?  // Optional link text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model About {
+  id                   String   @id @default(cuid())
+  
+  // Section 1: Basic Info
+  name                 String
+  description          String   @db.Text
+  profileImage         String?
+  profileImagePublicId String?
+  
+  // Section 2: Photography Journey
+  journeyTitle         String   @default("My Photography Journey")
+  journeyContent       String   @db.Text
+  
+  // Section 3: Values & Approach
+  valuesTitle          String   @default("My Values & Approach")
+  valuesContent        String   @db.Text
+  
+  // Meta
+  published            Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }
 
 enum Role {
