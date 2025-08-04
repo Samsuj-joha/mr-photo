@@ -27,6 +27,33 @@ const nextConfig = {
   serverRuntimeConfig: {
     maxDuration: 300, // 5 minutes
   },
+  // Add PDF headers for inline viewing
+  async headers() {
+    return [
+      {
+        // Apply these headers to all PDF files in uploads
+        source: '/uploads/pdfs/:path*.pdf',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/pdf',
+          },
+          {
+            key: 'Content-Disposition',
+            value: 'inline', // This ensures PDFs open in browser instead of downloading
+          },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000', // Cache for 1 year
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+        ],
+      },
+    ]
+  },
 }
 
 module.exports = nextConfig

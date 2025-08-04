@@ -1,4 +1,4 @@
-// prisma/schema.prisma - COMPLETE VERSION
+// prisma/schema.prisma - COMPLETE VERSION with Book models
 generator client {
   provider = "prisma-client-js"
 }
@@ -157,6 +157,55 @@ model About {
   published            Boolean  @default(true)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+}
+
+// 🆕 BOOK MODELS
+model Book {
+  id              String   @id @default(cuid())
+  
+  // Basic Info
+  title           String
+  subtitle        String?
+  author          String   @default("Moshiur Rahman")
+  description     String   @db.Text
+  
+  // Book Details
+  volume          String   // e.g., "Volume 1.0", "Volume 2.0"
+  pages           Int      // Number of pages
+  rating          Float    @default(0.0) // Rating out of 5
+  category        String   // e.g., "Documentary Series", "Visual Journey"
+  
+  // Images & Files
+  coverImage      String?  // Cover image URL
+  coverImagePublicId String? // Cloudinary public ID
+  pdfUrl          String?  // PDF file URL
+  pdfPublicId     String?  // Cloudinary public ID for PDF
+  
+  // SEO & Display
+  slug            String   @unique // URL-friendly version of title
+  featured        Boolean  @default(false)
+  published       Boolean  @default(true)
+  
+  // Order & Display
+  order           Int      @default(0) // Display order
+  
+  // Timestamps
+  publishedAt     DateTime? // When the book was published
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  tags            BookTag[]
+}
+
+model BookTag {
+  id     String @id @default(cuid())
+  name   String
+  color  String @default("blue") // Color for the tag (blue, purple, green, etc.)
+  bookId String
+  book   Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  
+  @@unique([name, bookId]) // Prevent duplicate tags for the same book
 }
 
 enum Role {

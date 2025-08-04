@@ -65,15 +65,15 @@ const mainNavItems = [
         href: "/pages/about",
         description: "Learn about my photography journey and passion"
       },
+       {
+        title: "book",
+        href: "/pages/book",
+        description: "Transparent pricing for all photography packages"
+      },
       {
         title: "Services",
         href: "/pages/services", 
         description: "Professional photography services I offer"
-      },
-      {
-        title: "book",
-        href: "/pages/book",
-        description: "Transparent pricing for all photography packages"
       },
     ]
   },
