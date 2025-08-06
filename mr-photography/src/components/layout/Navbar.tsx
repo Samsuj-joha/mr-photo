@@ -70,11 +70,7 @@ const mainNavItems = [
         href: "/pages/book",
         description: "Transparent pricing for all photography packages"
       },
-      {
-        title: "Services",
-        href: "/pages/services", 
-        description: "Professional photography services I offer"
-      },
+   
     ]
   },
   {
