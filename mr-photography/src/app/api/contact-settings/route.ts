@@ -8,17 +8,77 @@ import { db } from "@/lib/db"
 // GET contact settings for public use
 export async function GET() {
   try {
-    // For now, we'll return default settings since your schema doesn't have ContactSettings
-    // You can modify this to use a settings table or environment variables
-    const settings = {
+    let settings
+    
+    try {
+      settings = await db.contactSettings.findFirst({
+        orderBy: { updatedAt: "desc" }
+      })
+    } catch (dbError) {
+      console.log("Database not available, using default settings")
+      settings = null
+    }
+
+    if (!settings) {
+      // Return default settings with your real business information
+      return NextResponse.json({
+        title: "Get In Touch",
+        subtitle: "Ready to capture your special moments? Let's discuss your photography needs and create something beautiful together.",
+        phone: "+88 02 9882107-8",
+        phoneDescription: "Mon-Fri 9AM-6PM BST",
+        email: "info@paragongroup-bd.com",
+        emailDescription: "We'll respond within 24 hours",
+        location: "Paragon House 5, C/A Bir Uttam AK Khandakar Rd, Mohakhali",
+        locationDescription: "Dhaka 1212, Bangladesh",
+        responseTime: "24 Hours",
+        responseTimeDescription: "Typical response time",
+        businessHours: {
+          monday: "9:00 AM - 6:00 PM",
+          tuesday: "9:00 AM - 6:00 PM",
+          wednesday: "9:00 AM - 6:00 PM",
+          thursday: "9:00 AM - 6:00 PM",
+          friday: "9:00 AM - 6:00 PM",
+          saturday: "10:00 AM - 4:00 PM",
+          sunday: "By Appointment"
+        },
+        emergencyNote: "Emergency shoots available 24/7",
+        socialLinks: {
+          instagram: "https://instagram.com/mr_photography_bd",
+          facebook: "https://facebook.com/mrphotographybd",
+          twitter: "https://twitter.com/mr_photo_bd"
+        },
+        quickInfoTitle: "Ready to Book?",
+        quickInfoDescription: "We typically respond to inquiries within 24 hours. For urgent requests, please call directly."
+      })
+    }
+
+
+    if (typeof settings.socialLinks === 'string') {
+      try {
+        settings.socialLinks = JSON.parse(settings.socialLinks)
+      } catch {
+        settings.socialLinks = {
+          instagram: "https://instagram.com/mr_photography_bd",
+          facebook: "https://facebook.com/mrphotographybd",
+          twitter: "https://twitter.com/mr_photo_bd"
+        }
+      }
+    }
+
+    return NextResponse.json(settings)
+  } catch (error) {
+    console.error("Error fetching contact settings:", error)
+    
+    // Return fallback settings if everything fails
+    return NextResponse.json({
       title: "Get In Touch",
       subtitle: "Ready to capture your special moments? Let's discuss your photography needs and create something beautiful together.",
-      phone: process.env.CONTACT_PHONE || "+1 (555) 123-4567",
-      phoneDescription: "Mon-Fri 9AM-6PM EST",
-      email: process.env.CONTACT_EMAIL || "hello@mr-photography.com",
+      phone: "+88 02 9882107-8",
+      phoneDescription: "Mon-Fri 9AM-6PM BST",
+      email: "info@paragongroup-bd.com",
       emailDescription: "We'll respond within 24 hours",
-      location: process.env.CONTACT_LOCATION || "New York, NY",
-      locationDescription: "Available worldwide",
+      location: "Paragon House 5, C/A Bir Uttam AK Khandakar Rd, Mohakhali",
+      locationDescription: "Dhaka 1212, Bangladesh",
       responseTime: "24 Hours",
       responseTimeDescription: "Typical response time",
       businessHours: {
@@ -32,21 +92,13 @@ export async function GET() {
       },
       emergencyNote: "Emergency shoots available 24/7",
       socialLinks: {
-        instagram: process.env.INSTAGRAM_URL || "#",
-        facebook: process.env.FACEBOOK_URL || "#",
-        twitter: process.env.TWITTER_URL || "#"
+        instagram: "https://instagram.com/mr_photography_bd",
+        facebook: "https://facebook.com/mrphotographybd",
+        twitter: "https://twitter.com/mr_photo_bd"
       },
       quickInfoTitle: "Ready to Book?",
-      quickInfoDescription: "I typically respond to inquiries within 24 hours. For urgent requests, please call directly."
-    }
-
-    return NextResponse.json(settings)
-  } catch (error) {
-    console.error("Error fetching contact settings:", error)
-    return NextResponse.json(
-      { error: "Failed to fetch contact settings" },
-      { status: 500 }
-    )
+      quickInfoDescription: "We typically respond to inquiries within 24 hours. For urgent requests, please call directly."
+    })
   }
 }
 
@@ -64,14 +116,24 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     
-    // For now, we'll just return the updated settings
-    // In a real app, you'd save this to a database table
-    // You can extend your schema to include a ContactSettings model
+    // Check if settings already exist
+    const existingSettings = await db.contactSettings.findFirst()
     
-    return NextResponse.json({
-      message: "Contact settings updated successfully",
-      settings: body
-    })
+    let settings
+    if (existingSettings) {
+      // Update existing settings
+      settings = await db.contactSettings.update({
+        where: { id: existingSettings.id },
+        data: body
+      })
+    } else {
+      // Create new settings
+      settings = await db.contactSettings.create({
+        data: body
+      })
+    }
+
+    return NextResponse.json(settings)
   } catch (error) {
     console.error("Error updating contact settings:", error)
     return NextResponse.json(

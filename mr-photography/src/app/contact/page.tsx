@@ -189,10 +189,8 @@ export default function ContactPage() {
         {/* Dynamic Header */}
         <div className="text-center mb-16">
           <h1 className="text-4xl md:text-6xl font-light text-gray-900 dark:text-white mb-6">
-            {settings.title.split(' ').slice(0, -2).join(' ')}
-            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-gray-600 to-gray-900 dark:from-gray-300 dark:to-white">
-              {settings.title.split(' ').slice(-2).join(' ')}
-            </span>
+           
+            {settings.title}
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
             {settings.subtitle}
@@ -373,36 +371,6 @@ export default function ContactPage() {
                 </Card>
               ))}
             </div>
-
-            {/* Dynamic Business Hours */}
-            <Card className="p-6">
-              <h3 className="font-semibold text-lg mb-4 flex items-center">
-                <Clock className="h-5 w-5 mr-2" />
-                Business Hours
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Monday - Friday</span>
-                  <span className="font-medium">{settings.businessHours.monday}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Saturday</span>
-                  <span className="font-medium">{settings.businessHours.saturday}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Sunday</span>
-                  <span className="font-medium">{settings.businessHours.sunday}</span>
-                </div>
-                {settings.emergencyNote && (
-                  <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {settings.emergencyNote}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </Card>
-
             {/* Dynamic Social Media */}
             {socialLinks.length > 0 && (
               <Card className="p-6">
@@ -426,24 +394,6 @@ export default function ContactPage() {
                 </div>
               </Card>
             )}
-
-            {/* Dynamic Quick Action */}
-            <Card className="bg-gradient-to-r from-gray-800 to-gray-600 text-white p-6">
-              <h3 className="font-semibold text-lg mb-3">{settings.quickInfoTitle}</h3>
-              <p className="text-gray-200 text-sm mb-4">
-                {settings.quickInfoDescription}
-              </p>
-              <Button 
-                asChild
-                variant="secondary" 
-                className="w-full bg-white text-gray-900 hover:bg-gray-100 h-12"
-              >
-                <a href={`tel:${settings.phone.replace(/\s+/g, '').replace(/[()]/g, '')}`}>
-                  <Phone className="h-4 w-4 mr-2" />
-                  Call Now
-                </a>
-              </Button>
-            </Card>
 
           </div>
         </div>

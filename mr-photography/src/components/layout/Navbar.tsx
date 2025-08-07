@@ -132,7 +132,6 @@ export function Navbar() {
                   priority
                 />
               </div>
-              <div className="absolute -top-1 -right-1 h-3 w-3 bg-green-500 rounded-full border-2 border-white dark:border-gray-900 animate-pulse"></div>
             </div>
           </Link>
 

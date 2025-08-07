@@ -28,14 +28,6 @@ const footerNavigation = {
     { name: "About", href: "/pages/about" },
     { name: "Contact", href: "/contact" },
   ],
-  services: [
-    { name: "Wedding Photography", href: "/pages/services#wedding" },
-    { name: "Portrait Sessions", href: "/pages/services#portrait" },
-    { name: "Corporate Events", href: "/pages/services#corporate" },
-    { name: "Fashion Photography", href: "/pages/services#fashion" },
-    { name: "Nature Photography", href: "/pages/services#nature" },
-    { name: "Photo Editing", href: "/pages/services#editing" },
-  ],
   company: [
     { name: "About Us", href: "/pages/about" },
     { name: "Our Story", href: "/pages/about#story" },
@@ -89,7 +81,7 @@ export function Footer() {
         
         {/* Main Footer Content */}
         <div className="py-16">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
             
             {/* Brand Section */}
             <div className="space-y-6">
@@ -112,15 +104,18 @@ export function Footer() {
               <div className="space-y-3">
                 <div className="flex items-center space-x-3 text-sm text-gray-600 dark:text-gray-400">
                   <Phone className="h-4 w-4" />
-                  <span>+1 (555) 123-4567</span>
+                  <span>+88 02 9882107-8</span>
                 </div>
                 <div className="flex items-center space-x-3 text-sm text-gray-600 dark:text-gray-400">
                   <Mail className="h-4 w-4" />
-                  <span>hello@mr-photography.com</span>
+                  <span>info@paragongroup-bd.com</span>
                 </div>
-                <div className="flex items-center space-x-3 text-sm text-gray-600 dark:text-gray-400">
-                  <MapPin className="h-4 w-4" />
-                  <span>New York, NY</span>
+                <div className="flex items-start space-x-3 text-sm text-gray-600 dark:text-gray-400">
+                  <MapPin className="h-4 w-4 mt-0.5" />
+                  <div>
+                    <div>Paragon House 5, C/A Bir Uttam AK Khandakar Rd</div>
+                    <div>Mohakhali, Dhaka 1212, Bangladesh</div>
+                  </div>
                 </div>
               </div>
 
@@ -144,23 +139,6 @@ export function Footer() {
               <h4 className="text-lg font-semibold mb-6 text-gray-900 dark:text-white">Navigation</h4>
               <ul className="space-y-4">
                 {footerNavigation.main.map((item) => (
-                  <li key={item.name}>
-                    <Link
-                      href={item.href}
-                      className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors text-sm"
-                    >
-                      {item.name}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Services */}
-            <div>
-              <h4 className="text-lg font-semibold mb-6 text-gray-900 dark:text-white">Services</h4>
-              <ul className="space-y-4">
-                {footerNavigation.services.map((item) => (
                   <li key={item.name}>
                     <Link
                       href={item.href}
