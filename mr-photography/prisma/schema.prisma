@@ -1,4 +1,4 @@
-// prisma/schema.prisma - COMPLETE VERSION with Book models
+// prisma/schema.prisma - COMPLETE VERSION with Book models + Feature model
 generator client {
   provider = "prisma-client-js"
 }
@@ -206,6 +206,21 @@ model BookTag {
   book   Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
   
   @@unique([name, bookId]) // Prevent duplicate tags for the same book
+}
+
+// 🆕 FEATURE MODEL - Simple structure as requested
+model Feature {
+  id          String   @id @default(cuid())
+  title       String
+  description String   @db.Text
+  image       String?  // Image URL from Cloudinary
+  publicId    String?  // Cloudinary public ID for image management
+  icon        String?  // Icon name (lucide-react icon name) as fallback
+  published   Boolean  @default(true)
+  featured    Boolean  @default(false)
+  order       Int      @default(0) // Display order
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 enum Role {
