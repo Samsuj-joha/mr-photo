@@ -210,7 +210,7 @@ export function Footer() {
             {/* Copyright */}
             <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
               <Camera className="h-4 w-4" />
-              <span>© 2024 MR Photography. All rights reserved.</span>
+              <span>© 2025 MR Photography. All rights reserved.</span>
               <Heart className="h-4 w-4 text-red-500 animate-pulse" />
             </div>
 

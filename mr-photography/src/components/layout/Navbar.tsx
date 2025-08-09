@@ -31,10 +31,12 @@ import {
   Moon, 
   Camera,
   ChevronDown,
-  ShoppingBag,
+  Calendar,
   Phone,
   Mail,
-  MapPin
+  MapPin,
+  Heart,
+  Star
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
@@ -65,12 +67,11 @@ const mainNavItems = [
         href: "/pages/about",
         description: "Learn about my photography journey and passion"
       },
-       {
-        title: "book",
+      {
+        title: "Book",
         href: "/pages/book",
-        description: "Transparent pricing for all photography packages"
+        description: "View our photography book collections"
       },
-   
     ]
   },
   {
@@ -239,15 +240,15 @@ export function Navbar() {
               <span className="sr-only">Toggle theme</span>
             </Button>
 
-            {/* Buy Button */}
+            {/* Book Session Button - Perfect for Photography Showcase */}
             <Button
               asChild
               size="sm"
-              className="hidden md:flex bg-gradient-to-r from-gray-800 to-gray-600 hover:from-gray-700 hover:to-gray-500 text-white"
+              className="hidden md:flex bg-gradient-to-r from-gray-800 to-gray-600 hover:from-gray-700 hover:to-gray-500 text-white shadow-lg hover:shadow-xl transition-all duration-300"
             >
-              <Link href="/buy" className="flex items-center space-x-2">
-                <ShoppingBag className="h-4 w-4" />
-                <span>Buy</span>
+              <Link href="/contact" className="flex items-center space-x-2">
+                <Menu className="h-4 w-4" />
+                <span>Book Session</span>
               </Link>
             </Button>
 
@@ -264,7 +265,6 @@ export function Navbar() {
                 </Button>
               </SheetTrigger>
               <SheetContent side="right" className="w-80 sm:w-96">
-                {/* Add proper accessibility structure */}
                 <SheetHeader className="sr-only">
                   <SheetTitle>Navigation Menu</SheetTitle>
                 </SheetHeader>
@@ -272,21 +272,15 @@ export function Navbar() {
                   
                   {/* Mobile Logo */}
                   <div className="flex items-center space-x-3 pb-6 border-b border-gray-200 dark:border-gray-800">
-                    <div className="w-10 h-10 rounded-xl overflow-hidden">
-                      <Image
-                        src="/images/logo/logo.png"
-                        alt="MR Photography Logo"
-                        width={40}
-                        height={40}
-                        className="object-contain w-full h-full"
-                      />
+                    <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+                      <Camera className="h-6 w-6 text-white" />
                     </div>
                     <div>
                       <h1 className="text-lg font-light text-gray-900 dark:text-white tracking-wide">
                         MR PHOTOGRAPHY
                       </h1>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Professional Photography
+                        Professional Photography Showcase
                       </p>
                     </div>
                   </div>
@@ -332,13 +326,27 @@ export function Navbar() {
 
                   {/* Mobile Actions */}
                   <div className="pt-6 border-t border-gray-200 dark:border-gray-800 space-y-4">
+                    
+                    {/* Book Session Button */}
                     <Button
                       asChild
-                      className="w-full bg-gradient-to-r from-gray-800 to-gray-600 hover:from-gray-700 hover:to-gray-500 text-white"
+                      className="w-full bg-gradient-to-r from-gray-800 to-gray-600 hover:from-gray-700 hover:to-gray-500 text-white shadow-lg"
                     >
-                      <Link href="/buy" onClick={() => setIsOpen(false)}>
-                        <ShoppingBag className="h-4 w-4 mr-2" />
-                        Buy Prints
+                      <Link href="/contact" onClick={() => setIsOpen(false)}>
+                        <Menu className="h-4 w-4 mr-2" />
+                        Book a Session
+                      </Link>
+                    </Button>
+
+                    {/* View Portfolio Button */}
+                    <Button
+                      asChild
+                      variant="outline"
+                      className="w-full border-gray-300 dark:border-gray-600"
+                    >
+                      <Link href="/portfolio" onClick={() => setIsOpen(false)}>
+                        <Heart className="h-4 w-4 mr-2" />
+                        View Portfolio
                       </Link>
                     </Button>
                     
@@ -346,17 +354,43 @@ export function Navbar() {
                     <div className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
                       <div className="flex items-center space-x-3">
                         <Phone className="h-4 w-4" />
-                        <span>+1 (555) 123-4567</span>
+                        <span>+88 02 9882107-8</span>
                       </div>
                       <div className="flex items-center space-x-3">
                         <Mail className="h-4 w-4" />
-                        <span>hello@mr-photography.com</span>
+                        <span>info@paragongroup-bd.com</span>
                       </div>
-                      <div className="flex items-center space-x-3">
-                        <MapPin className="h-4 w-4" />
-                        <span>New York, NY</span>
+                      <div className="flex items-start space-x-3">
+                        <MapPin className="h-4 w-4 mt-0.5" />
+                        <div className="text-xs leading-relaxed">
+                          <div>Paragon House 5, C/A Bir Uttam</div>
+                          <div>AK Khandakar Rd, Mohakhali</div>
+                          <div>Dhaka 1212, Bangladesh</div>
+                        </div>
                       </div>
                     </div>
+
+                    {/* Quick Stats */}
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-xl p-4 space-y-2">
+                      <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                        Photography Showcase
+                      </h4>
+                      <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
+                        <div className="flex items-center space-x-1">
+                          <Camera className="h-3 w-3" />
+                          <span>Professional</span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <Star className="h-3 w-3" />
+                          <span>Portfolio</span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <Heart className="h-3 w-3" />
+                          <span>Creative</span>
+                        </div>
+                      </div>
+                    </div>
+
                   </div>
 
                 </div>
