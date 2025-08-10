@@ -167,7 +167,7 @@ export default function AboutPage() {
               </h2>
             </div>
             
-            <div className="bg-gray-900 rounded-lg p-6 md:p-8 text-white">
+            <div className="bg-gray-50 rounded-lg p-6 md:p-8">
               <div className="text-lg">
                 {formatText(aboutData.valuesContent)}
               </div>

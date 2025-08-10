@@ -77,7 +77,7 @@ export function HomeSlider({
   const currentImage = images[currentIndex]
 
   return (
-    <div className="relative w-full h-[80vh] overflow-hidden group">
+    <div className="relative w-full h-[60vh] md:h-[70vh] lg:h-[100vh] max-h-[800px] overflow-hidden group rounded-md shadow-xl border border-border">
       {/* Main Image */}
       <div className="relative w-full h-full">
         <Image
