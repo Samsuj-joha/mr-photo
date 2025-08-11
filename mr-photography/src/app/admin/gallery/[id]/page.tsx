@@ -1,7 +1,7 @@
 // src/app/admin/gallery/[id]/page.tsx
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -53,7 +53,11 @@ interface Gallery {
   imageCount: number
 }
 
-export default function GalleryImagesPage({ params }: { params: { id: string } }) {
+interface PageProps {
+  params: Promise<{ id: string }>
+}
+
+export default function GalleryImagesPage({ params }: PageProps) {
   const router = useRouter()
   const [gallery, setGallery] = useState<Gallery | null>(null)
   const [loading, setLoading] = useState(true)
@@ -62,11 +66,23 @@ export default function GalleryImagesPage({ params }: { params: { id: string } }
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
   const [currentUploadFile, setCurrentUploadFile] = useState<string>("")
+  const [galleryId, setGalleryId] = useState<string>("")
+
+  // Get gallery ID from params
+  useEffect(() => {
+    const getParams = async () => {
+      const resolvedParams = await params
+      setGalleryId(resolvedParams.id)
+    }
+    getParams()
+  }, [params])
 
   // Fetch gallery details
-  const fetchGallery = async () => {
+  const fetchGallery = useCallback(async () => {
+    if (!galleryId) return
+    
     try {
-      const response = await fetch(`/api/gallery/${params.id}`)
+      const response = await fetch(`/api/gallery/${galleryId}`)
       if (response.ok) {
         const data = await response.json()
         setGallery(data)
@@ -82,11 +98,13 @@ export default function GalleryImagesPage({ params }: { params: { id: string } }
     } finally {
       setLoading(false)
     }
-  }
+  }, [galleryId, router])
 
   useEffect(() => {
-    fetchGallery()
-  }, [params.id])
+    if (galleryId) {
+      fetchGallery()
+    }
+  }, [galleryId, fetchGallery])
 
   // Dropzone configuration for any size images
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -132,7 +150,7 @@ export default function GalleryImagesPage({ params }: { params: { id: string } }
 
         const formData = new FormData()
         formData.append('file', file)
-        formData.append('galleryId', params.id)
+        formData.append('galleryId', galleryId)
         formData.append('alt', file.name.split('.')[0])
 
         const response = await fetch('/api/upload', {
