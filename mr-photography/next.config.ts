@@ -1,13 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Disable ESLint during builds (for faster deployment)
+  // Disable ESLint during builds to prevent deployment failures
   eslint: {
     ignoreDuringBuilds: true,
   },
   
-  // Disable TypeScript errors during builds (optional)
+  // Disable TypeScript errors during builds (optional - set to true if needed)
   typescript: {
-    ignoreBuildErrors: false, // Set to true if you want to ignore TS errors too
+    ignoreBuildErrors: false, // Change to true if you have TypeScript errors too
   },
 
   images: {
@@ -25,12 +25,17 @@ const nextConfig = {
     ],
   },
 
+  // Simplified experimental config for Next.js 15
   experimental: {
-    serverActions: true,
-    serverComponentsExternalPackages: ['cloudinary'],
+    serverActions: {
+      allowedOrigins: ["localhost:3000", "mr-photo-eta.vercel.app"]
+    }
   },
 
-  // Simplified for Vercel deployment
+  // External packages for server components
+  serverExternalPackages: ['cloudinary'],
+
+  // Headers for PDF files
   async headers() {
     return [
       {
