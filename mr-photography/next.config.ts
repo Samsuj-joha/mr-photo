@@ -1,6 +1,15 @@
-// next.config.ts
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Disable ESLint during builds (for faster deployment)
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  
+  // Disable TypeScript errors during builds (optional)
+  typescript: {
+    ignoreBuildErrors: false, // Set to true if you want to ignore TS errors too
+  },
+
   images: {
     domains: ['res.cloudinary.com', 'images.unsplash.com'],
     formats: ['image/webp', 'image/avif'],
@@ -9,29 +18,22 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'res.cloudinary.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+      },
     ],
   },
+
   experimental: {
     serverActions: true,
     serverComponentsExternalPackages: ['cloudinary'],
-    largePageDataBytes: 128 * 100000, // ~12.8MB for large uploads
   },
-  // Allow large file uploads
-  api: {
-    bodyParser: {
-      sizeLimit: '100mb', // Increase from default 1mb to 100mb
-    },
-    responseLimit: false,
-  },
-  // Increase serverless function timeout
-  serverRuntimeConfig: {
-    maxDuration: 300, // 5 minutes
-  },
-  // Add PDF headers for inline viewing
+
+  // Simplified for Vercel deployment
   async headers() {
     return [
       {
-        // Apply these headers to all PDF files in uploads
         source: '/uploads/pdfs/:path*.pdf',
         headers: [
           {
@@ -40,11 +42,11 @@ const nextConfig = {
           },
           {
             key: 'Content-Disposition',
-            value: 'inline', // This ensures PDFs open in browser instead of downloading
+            value: 'inline',
           },
           {
             key: 'Cache-Control',
-            value: 'public, max-age=31536000', // Cache for 1 year
+            value: 'public, max-age=31536000',
           },
           {
             key: 'X-Content-Type-Options',
@@ -52,8 +54,8 @@ const nextConfig = {
           },
         ],
       },
-    ]
+    ];
   },
-}
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;
