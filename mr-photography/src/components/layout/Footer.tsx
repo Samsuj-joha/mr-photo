@@ -515,27 +515,6 @@ export function Footer() {
                           </div>
                         )}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                        
-                        {/* Feature Badge */}
-                        <div className="absolute top-3 left-3">
-                          <span className="px-2 py-1 bg-black/50 text-white text-xs rounded-full backdrop-blur-sm">
-                            Featured
-                          </span>
-                        </div>
-
-                        {/* Feature Stats */}
-                        <div className="absolute top-3 right-3 flex space-x-2">
-                          <div className="flex items-center space-x-1 bg-black/50 px-2 py-1 rounded-full backdrop-blur-sm">
-                            <Star className="h-3 w-3 text-yellow-400" />
-                            <span className="text-white text-xs">Featured</span>
-                          </div>
-                        </div>
-
-                        {/* Feature Title & Description */}
-                        <div className="absolute bottom-0 left-0 right-0 p-4">
-                          <h5 className="text-white font-medium text-sm mb-1">{feature.title}</h5>
-                          <p className="text-gray-300 text-xs line-clamp-2">{feature.description}</p>
-                        </div>
                       </div>
                     </Link>
                   ))}
