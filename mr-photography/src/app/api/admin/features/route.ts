@@ -1,8 +1,10 @@
-// src/app/api/admin/features/route.ts - CREATE THIS FILE
+
+// src/app/api/admin/features/route.ts - ENHANCED with TIFF Support & Compression
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
+import { convertImageToJPEG, optimizeImage } from "@/lib/imageConverter"
 
 // GET /api/admin/features - Get all features for admin
 export async function GET(request: NextRequest) {
@@ -44,24 +46,6 @@ export async function GET(request: NextRequest) {
 
     console.log('👤 Admin user authenticated:', session.user.email)
 
-    // Check if Feature table exists
-    try {
-      const tableExists = await db.$queryRaw`
-        SELECT EXISTS (
-          SELECT FROM information_schema.tables 
-          WHERE table_schema = 'public' 
-          AND table_name = 'Feature'
-        );
-      `
-      console.log('📊 Feature table exists check:', tableExists)
-    } catch (tableError) {
-      console.error('❌ Feature table check failed:', tableError)
-      return NextResponse.json(
-        { error: 'Feature table does not exist. Please run: npx prisma migrate dev' },
-        { status: 500 }
-      )
-    }
-
     // Try to fetch features
     try {
       console.log('🔍 Attempting to fetch features...')
@@ -75,7 +59,6 @@ export async function GET(request: NextRequest) {
       
       console.log(`✅ Successfully fetched ${features.length} features`)
       
-      // Ensure we return an array
       if (!Array.isArray(features)) {
         console.error('❌ Features is not an array:', typeof features)
         return NextResponse.json(
@@ -110,47 +93,215 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/admin/features - Create new feature
+// POST /api/admin/features - Create new feature with ENHANCED image processing
 export async function POST(request: NextRequest) {
+  console.log("🚀 Feature upload API called with TIFF support")
+  
   try {
-    console.log('📝 Creating new feature...')
+    // Step 1: Check environment variables
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME
+    const apiKey = process.env.CLOUDINARY_API_KEY
+    const apiSecret = process.env.CLOUDINARY_API_SECRET
     
-    const session = await getServerSession(authOptions)
-    
-    if (!session || session.user.role !== 'ADMIN') {
+    if (!cloudName || !apiKey || !apiSecret) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: "Server configuration error - missing Cloudinary credentials" },
+        { status: 500 }
+      )
+    }
+    
+    // Step 2: Check authentication
+    const session = await getServerSession(authOptions)
+    if (!session || session.user.role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Unauthorized - Admin access required" },
         { status: 401 }
       )
     }
 
-    const data = await request.json()
-    console.log('📦 Received data:', {
-      title: data.title,
-      hasImage: !!data.image,
-      imageUrl: data.image ? data.image.substring(0, 50) + '...' : 'none',
-      publicId: data.publicId
-    })
-    
+    // Step 3: Parse form data
+    const formData = await request.formData()
+    const title = formData.get('title') as string
+    const description = formData.get('description') as string
+    const imageFile = formData.get('image') as File | null
+    const icon = formData.get('icon') as string
+    const published = formData.get('published') === 'true'
+    const featured = formData.get('featured') === 'true'
+    const order = parseInt(formData.get('order') as string) || 0
+
     // Validate required fields
-    if (!data.title || !data.description) {
+    if (!title || !description) {
       return NextResponse.json(
         { error: 'Title and description are required' },
         { status: 400 }
       )
     }
 
-    // Create feature with all fields
+    let finalImageUrl = null
+    let finalPublicId = null
+    let processingInfo: any = {}
+
+    // Process image if provided
+    if (imageFile && imageFile.size > 0) {
+      if (!imageFile.type.startsWith('image/')) {
+        return NextResponse.json({ error: "File must be an image" }, { status: 400 })
+      }
+
+      console.log(`📁 Original file: ${imageFile.name} (${(imageFile.size / 1024 / 1024).toFixed(2)}MB, ${imageFile.type})`)
+
+      // ✨ SMART IMAGE PROCESSING
+      let processedBuffer: Buffer
+      let processedFileName: string
+      
+      try {
+        const isTiff = imageFile.type === 'image/tiff' || 
+                      imageFile.type === 'image/tif' || 
+                      imageFile.name.toLowerCase().endsWith('.tif') || 
+                      imageFile.name.toLowerCase().endsWith('.tiff')
+        const isLarge = imageFile.size > 10 * 1024 * 1024 // Over 10MB
+        
+        if (isTiff) {
+          console.log(`🔄 TIFF file detected, converting to JPEG...`)
+          const conversionResult = await convertImageToJPEG(imageFile)
+          
+          if (conversionResult.convertedSize > 10 * 1024 * 1024) {
+            console.log(`⚠️ Converted file still large, optimizing...`)
+            const tempFile = new File([conversionResult.buffer], imageFile.name.replace(/\.tiff?$/i, '.jpg'), { type: 'image/jpeg' })
+            const optimizationResult = await optimizeImage(tempFile, {
+              maxWidth: 1200, // Features don't need huge images
+              maxHeight: 800,
+              quality: 85
+            })
+            
+            processedBuffer = optimizationResult.buffer
+            processedFileName = imageFile.name.replace(/\.tiff?$/i, '.jpg')
+            processingInfo = {
+              originalFormat: 'TIFF',
+              finalFormat: 'JPEG',
+              originalSize: imageFile.size,
+              convertedSize: conversionResult.convertedSize,
+              finalSize: optimizationResult.convertedSize,
+              wasConverted: true,
+              wasOptimized: true,
+              dimensions: `${optimizationResult.width}×${optimizationResult.height}`
+            }
+          } else {
+            processedBuffer = conversionResult.buffer
+            processedFileName = imageFile.name.replace(/\.tiff?$/i, '.jpg')
+            processingInfo = {
+              originalFormat: 'TIFF',
+              finalFormat: 'JPEG',
+              originalSize: imageFile.size,
+              finalSize: conversionResult.convertedSize,
+              wasConverted: true,
+              wasOptimized: false,
+              dimensions: `${conversionResult.width}×${conversionResult.height}`
+            }
+          }
+          
+        } else if (isLarge) {
+          console.log(`📦 Large file detected, optimizing...`)
+          const optimizationResult = await optimizeImage(imageFile, {
+            maxWidth: 1200,
+            maxHeight: 800,
+            quality: 85
+          })
+          
+          processedBuffer = optimizationResult.buffer
+          processedFileName = imageFile.name.replace(/\.[^/.]+$/, '.jpg')
+          processingInfo = {
+            originalFormat: imageFile.type,
+            finalFormat: 'JPEG',
+            originalSize: imageFile.size,
+            finalSize: optimizationResult.convertedSize,
+            wasConverted: false,
+            wasOptimized: true,
+            dimensions: `${optimizationResult.width}×${optimizationResult.height}`
+          }
+          
+        } else {
+          console.log(`✅ File size acceptable, processing as-is`)
+          const arrayBuffer = await imageFile.arrayBuffer()
+          processedBuffer = Buffer.from(arrayBuffer)
+          processedFileName = imageFile.name
+          processingInfo = {
+            originalFormat: imageFile.type,
+            finalFormat: imageFile.type,
+            originalSize: imageFile.size,
+            finalSize: imageFile.size,
+            wasConverted: false,
+            wasOptimized: false
+          }
+        }
+        
+      } catch (conversionError) {
+        console.error('❌ Image processing failed:', conversionError)
+        return NextResponse.json({
+          error: "IMAGE_PROCESSING_FAILED",
+          message: `Failed to process image: ${conversionError instanceof Error ? conversionError.message : 'Unknown error'}`
+        }, { status: 422 })
+      }
+      
+      // Upload to Cloudinary
+      console.log("☁️ Uploading processed feature image to Cloudinary...")
+      
+      try {
+        const { v2: cloudinary } = await import('cloudinary')
+        
+        cloudinary.config({
+          cloud_name: cloudName,
+          api_key: apiKey,
+          api_secret: apiSecret,
+          secure: true
+        })
+        
+        const uploadResult = await new Promise((resolve, reject) => {
+          cloudinary.uploader.upload_stream(
+            {
+              folder: 'mr-photography/features',
+              resource_type: 'image',
+              transformation: [
+                { width: 1200, height: 800, crop: 'limit', quality: 'auto:good' },
+                { fetch_format: 'auto' }
+              ],
+              timeout: 300000,
+              public_id: processedFileName.replace(/\.[^/.]+$/, ''),
+            },
+            (error, result) => {
+              if (error) {
+                reject(error)
+              } else {
+                resolve(result)
+              }
+            }
+          ).end(processedBuffer)
+        }) as any
+        
+        finalImageUrl = uploadResult.secure_url
+        finalPublicId = uploadResult.public_id
+        
+        console.log("📤 Cloudinary upload completed successfully")
+        
+      } catch (cloudinaryError) {
+        console.error("❌ Cloudinary upload failed:", cloudinaryError)
+        return NextResponse.json({
+          error: "Cloudinary upload failed",
+          details: cloudinaryError instanceof Error ? cloudinaryError.message : String(cloudinaryError)
+        }, { status: 500 })
+      }
+    }
+
+    // Step 4: Save to database
     const feature = await db.feature.create({
       data: {
-        title: data.title.trim(),
-        description: data.description.trim(),
-        image: data.image || null,        // ✅ FIXED: Ensure image is saved
-        publicId: data.publicId || null,  // ✅ FIXED: Ensure publicId is saved
-        icon: data.icon || null,
-        published: data.published ?? true,
-        featured: data.featured ?? false,
-        order: data.order ?? 0,
+        title: title.trim(),
+        description: description.trim(),
+        image: finalImageUrl,
+        publicId: finalPublicId,
+        icon: icon || null,
+        published,
+        featured,
+        order,
       }
     })
 
@@ -161,7 +312,16 @@ export async function POST(request: NextRequest) {
       imageUrl: feature.image
     })
 
-    return NextResponse.json(feature, { status: 201 })
+    const response = {
+      ...feature,
+      uploadDetails: processingInfo,
+      message: processingInfo.wasConverted 
+        ? "TIFF feature image converted to JPEG and uploaded successfully"
+        : "Feature created successfully"
+    }
+
+    return NextResponse.json(response, { status: 201 })
+    
   } catch (error) {
     console.error('❌ Error creating feature:', error)
     return NextResponse.json(
