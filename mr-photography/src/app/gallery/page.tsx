@@ -174,7 +174,7 @@ export default function GalleryPage() {
 
   return (
     <div className="min-h-screen ">
-      <div className="max-w-7xl  py-8">
+      <div className="max-w-auto  py-8">
         
         {/* Filters Section */}
         <div className="mb-8">
@@ -238,3 +238,5 @@ export default function GalleryPage() {
     </div>
   )
 }
+
+
