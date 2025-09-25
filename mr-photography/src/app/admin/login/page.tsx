@@ -1074,7 +1074,7 @@ const FloatingInput = ({
           }}
         >
           {label}
-        </span>
+        </span>      
       </label>
       
       {/* Password Toggle (if applicable) */}
