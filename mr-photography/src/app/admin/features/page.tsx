@@ -1,22 +1,23 @@
-// src/app/admin/features/page.tsx - COMPLETE DEBUG VERSION
+// src/app/admin/features/page.tsx - CLEAN VERSION with TIFF Support
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { 
   Dialog, 
   DialogContent, 
   DialogDescription, 
   DialogHeader, 
-  DialogTitle, 
-  DialogTrigger 
+  DialogTitle
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
+import { Progress } from "@/components/ui/progress"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   Plus,
   Search,
@@ -27,13 +28,13 @@ import {
   Image as ImageIcon,
   Star,
   Settings,
-  MoreHorizontal,
-  GripVertical,
-  Save,
-  X,
   Loader2,
+  X,
+  CheckCircle,
+  AlertCircle,
+  FileImage,
+  Zap
 } from "lucide-react"
-import Image from "next/image"
 
 interface Feature {
   id: string
@@ -49,6 +50,13 @@ interface Feature {
   updatedAt: string
 }
 
+interface UploadProgress {
+  stage: string
+  progress: number
+  message: string
+  details?: any
+}
+
 export default function AdminFeaturesPage() {
   const [features, setFeatures] = useState<Feature[]>([])
   const [searchQuery, setSearchQuery] = useState("")
@@ -56,70 +64,39 @@ export default function AdminFeaturesPage() {
   const [editingFeature, setEditingFeature] = useState<Feature | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isPageLoading, setIsPageLoading] = useState(true)
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null)
 
   // Form state
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    image: "",
-    publicId: "",
+    image: null as File | null,
     icon: "",
     published: true,
     featured: false,
     order: 0,
   })
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
-  // 🔍 STEP 1: Fetch features from database
+  // Fetch features
   const fetchFeatures = async () => {
     try {
       setIsPageLoading(true)
-      console.log('🔄 STEP 1: Fetching features from admin API...')
-      
       const response = await fetch('/api/admin/features')
-      console.log('📡 STEP 1: Response status:', response.status)
       
       if (response.ok) {
         const data = await response.json()
-        console.log('📦 STEP 1: Raw API response:', data)
-        console.log('📊 STEP 1: Type of data:', typeof data, Array.isArray(data))
-        
-        if (data.error) {
-          console.error('❌ STEP 1: API returned error:', data.error)
+        if (Array.isArray(data)) {
+          setFeatures(data)
+        } else {
           setFeatures([])
-          return
         }
-        
-        if (!Array.isArray(data)) {
-          console.error('❌ STEP 1: Data is not array:', typeof data)
-          setFeatures([])
-          return
-        }
-        
-        console.log('✅ STEP 1: Successfully fetched', data.length, 'features')
-        
-        // 🔍 DETAILED ANALYSIS OF EACH FEATURE
-        data.forEach((feature, index) => {
-          console.log(`\n🔍 FEATURE ${index + 1} ANALYSIS:`)
-          console.log('  - ID:', feature.id)
-          console.log('  - Title:', feature.title)
-          console.log('  - Image field exists:', 'image' in feature)
-          console.log('  - Image value:', feature.image)
-          console.log('  - Image type:', typeof feature.image)
-          console.log('  - Image is truthy:', !!feature.image)
-          console.log('  - Image length:', feature.image?.length || 'N/A')
-          console.log('  - PublicId:', feature.publicId)
-          console.log('  - Published:', feature.published)
-          console.log('  - Full feature object:', feature)
-        })
-        
-        setFeatures(data)
       } else {
-        const errorText = await response.text()
-        console.error('❌ STEP 1: HTTP error:', response.status, errorText)
         setFeatures([])
       }
     } catch (error) {
-      console.error('💥 STEP 1: Fetch error:', error)
+      console.error('Error fetching features:', error)
       setFeatures([])
     } finally {
       setIsPageLoading(false)
@@ -136,222 +113,228 @@ export default function AdminFeaturesPage() {
   )
 
   const handleCreateFeature = () => {
-    console.log('🔄 STEP 2: Creating new feature form...')
     setEditingFeature(null)
     setFormData({
       title: "",
       description: "",
-      image: "",
-      publicId: "",
+      image: null,
       icon: "",
       published: true,
       featured: false,
       order: features.length + 1,
     })
+    setImagePreview(null)
+    setErrors({})
+    setUploadProgress(null)
     setIsDialogOpen(true)
   }
 
   const handleEditFeature = (feature: Feature) => {
-    console.log('🔄 STEP 2: Editing feature:', feature.title)
-    console.log('🔍 STEP 2: Feature image data:', {
-      hasImage: !!feature.image,
-      imageUrl: feature.image,
-      publicId: feature.publicId
-    })
     setEditingFeature(feature)
     setFormData({
       title: feature.title,
       description: feature.description,
-      image: feature.image || "",
-      publicId: feature.publicId || "",
+      image: null,
       icon: feature.icon || "",
       published: feature.published,
       featured: feature.featured,
       order: feature.order,
     })
+    setImagePreview(feature.image || null)
+    setErrors({})
+    setUploadProgress(null)
     setIsDialogOpen(true)
   }
 
-  // 🔍 STEP 3: Image upload process
-  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    console.log('🔄 STEP 3: Starting image upload...')
-    console.log('📁 STEP 3: File selected:', {
-      name: file.name,
-      size: file.size,
-      type: file.type
-    })
-
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file')
-      return
-    }
-
-    if (file.size > 10 * 1024 * 1024) {
-      alert('File size must be less than 10MB')
-      return
-    }
-
-    setIsLoading(true)
-
-    try {
-      const uploadFormData = new FormData()
-      uploadFormData.append('file', file)
-      uploadFormData.append('title', formData.title || 'Feature Image')
-      uploadFormData.append('alt', formData.title || 'Feature Image')
-
-      console.log('📤 STEP 3: Sending upload request...')
-
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: uploadFormData,
-      })
-
-      console.log('📡 STEP 3: Upload response status:', response.status)
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error('❌ STEP 3: Upload failed:', errorData)
-        throw new Error(errorData.error || `Upload failed with status ${response.status}`)
-      }
-
-      const result = await response.json()
-      console.log('✅ STEP 3: Upload successful - Full result:', result)
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setFormData(prev => ({ ...prev, image: file }))
       
-      // Extract image URL and publicId
-      let imageUrl = null
-      let publicId = null
-
-      if (result.url) {
-        imageUrl = result.url
-        publicId = result.public_id || result.publicId
-      } else if (result.secure_url) {
-        imageUrl = result.secure_url
-        publicId = result.public_id || result.publicId
-      } else {
-        console.error('❌ STEP 3: No image URL found in result:', result)
-        throw new Error('No image URL returned from upload')
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string)
       }
-
-      console.log('🖼️ STEP 3: Image URL extracted:', imageUrl)
-      console.log('🔑 STEP 3: Public ID extracted:', publicId)
-
-      // Update form data
-      setFormData(prev => {
-        const newFormData = {
-          ...prev,
-          image: imageUrl,
-          publicId: publicId,
-        }
-        console.log('📋 STEP 3: Form data updated:', {
-          title: newFormData.title,
-          hasImage: !!newFormData.image,
-          imageUrl: newFormData.image,
-          publicId: newFormData.publicId
-        })
-        return newFormData
-      })
-
-      console.log('✅ STEP 3: Image upload completed successfully!')
-
-    } catch (error) {
-      console.error('💥 STEP 3: Upload error:', error)
-      alert(`Upload failed: ${error.message}`)
-    } finally {
-      setIsLoading(false)
-      event.target.value = ''
+      reader.readAsDataURL(file)
+      
+      if (errors.image) {
+        setErrors(prev => ({ ...prev, image: "" }))
+      }
     }
   }
 
-  // 🔍 STEP 4: Save feature to database
+  const removeImage = () => {
+    setFormData(prev => ({ ...prev, image: null }))
+    setImagePreview(editingFeature?.image || null)
+  }
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {}
+    
+    if (!formData.title.trim()) {
+      newErrors.title = "Title is required"
+    }
+    
+    if (!formData.description.trim()) {
+      newErrors.description = "Description is required"
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024 * 1024) {
+      return (bytes / 1024).toFixed(1) + ' KB'
+    }
+    return (bytes / (1024 * 1024)).toFixed(2) + ' MB'
+  }
+
+  const getFileTypeInfo = (file: File) => {
+    const isTiff = file.type === 'image/tiff' || 
+                  file.type === 'image/tif' || 
+                  file.name.toLowerCase().endsWith('.tif') || 
+                  file.name.toLowerCase().endsWith('.tiff')
+    
+    const isLarge = file.size > 10 * 1024 * 1024
+    
+    return { isTiff, isLarge }
+  }
+
   const handleSaveFeature = async () => {
-    if (!formData.title.trim() || !formData.description.trim()) {
-      alert('Title and description are required')
+    if (!validateForm()) {
       return
     }
 
-    console.log('🔄 STEP 4: Saving feature to database...')
-    console.log('📦 STEP 4: Form data being saved:', {
-      title: formData.title,
-      description: formData.description.substring(0, 50) + '...',
-      hasImage: !!formData.image,
-      imageUrl: formData.image,
-      publicId: formData.publicId,
-      published: formData.published,
-      featured: formData.featured,
-      order: formData.order,
-      isEditing: !!editingFeature
-    })
-
     setIsLoading(true)
+    setUploadProgress({
+      stage: "preparing",
+      progress: 0,
+      message: "Preparing to save feature..."
+    })
     
     try {
+      const saveFormData = new FormData()
+      saveFormData.append('title', formData.title.trim())
+      saveFormData.append('description', formData.description.trim())
+      saveFormData.append('icon', formData.icon || '')
+      saveFormData.append('published', formData.published.toString())
+      saveFormData.append('featured', formData.featured.toString())
+      saveFormData.append('order', formData.order.toString())
+      
+      if (formData.image) {
+        saveFormData.append('image', formData.image)
+        
+        const { isTiff, isLarge } = getFileTypeInfo(formData.image)
+        const fileSizeMB = (formData.image.size / (1024 * 1024)).toFixed(2)
+        
+        if (isTiff) {
+          setUploadProgress({
+            stage: "converting",
+            progress: 20,
+            message: `Converting TIFF file (${fileSizeMB}MB) to JPEG...`,
+            details: { originalFormat: "TIFF", targetFormat: "JPEG" }
+          })
+        } else if (isLarge) {
+          setUploadProgress({
+            stage: "optimizing",
+            progress: 20,
+            message: `Optimizing large file (${fileSizeMB}MB)...`,
+            details: { originalSize: fileSizeMB + "MB" }
+          })
+        } else {
+          setUploadProgress({
+            stage: "uploading",
+            progress: 30,
+            message: "Uploading to cloud storage..."
+          })
+        }
+      }
+
+      // Progress simulation
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (!prev) return null
+          const newProgress = Math.min(prev.progress + 15, 85)
+          
+          if (prev.stage === "converting" && newProgress > 50) {
+            return {
+              stage: "uploading",
+              progress: newProgress,
+              message: "Uploading converted image..."
+            }
+          }
+          
+          if (prev.stage === "optimizing" && newProgress > 50) {
+            return {
+              stage: "uploading",
+              progress: newProgress,
+              message: "Uploading optimized image..."
+            }
+          }
+          
+          return {
+            ...prev,
+            progress: newProgress
+          }
+        })
+      }, 800)
+
       const url = editingFeature ? `/api/admin/features/${editingFeature.id}` : '/api/admin/features'
       const method = editingFeature ? 'PUT' : 'POST'
       
-      console.log(`📡 STEP 4: Making ${method} request to:`, url)
-      
-      const payload = {
-        title: formData.title.trim(),
-        description: formData.description.trim(),
-        image: formData.image || null,
-        publicId: formData.publicId || null,
-        icon: formData.icon || null,
-        published: formData.published,
-        featured: formData.featured,
-        order: formData.order,
-      }
-      
-      console.log('📦 STEP 4: Payload being sent:', payload)
-      
       const response = await fetch(url, {
         method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
+        body: saveFormData,
       })
 
-      console.log('📡 STEP 4: Save response status:', response.status)
+      clearInterval(progressInterval)
 
       if (response.ok) {
         const savedFeature = await response.json()
-        console.log('✅ STEP 4: Feature saved successfully:', {
-          id: savedFeature.id,
-          title: savedFeature.title,
-          hasImage: !!savedFeature.image,
-          imageUrl: savedFeature.image,
-          publicId: savedFeature.publicId
+        
+        setUploadProgress({
+          stage: "complete",
+          progress: 100,
+          message: savedFeature.message || "Feature saved successfully!",
+          details: savedFeature.uploadDetails
         })
         
-        // Refresh features list
-        console.log('🔄 STEP 4: Refreshing features list...')
         await fetchFeatures()
         
-        setIsDialogOpen(false)
-        setEditingFeature(null)
-        setFormData({
-          title: "",
-          description: "",
-          image: "",
-          publicId: "",
-          icon: "",
-          published: true,
-          featured: false,
-          order: 0,
-        })
+        setTimeout(() => {
+          setIsDialogOpen(false)
+          setEditingFeature(null)
+          setFormData({
+            title: "",
+            description: "",
+            image: null,
+            icon: "",
+            published: true,
+            featured: false,
+            order: 0,
+          })
+          setImagePreview(null)
+          setUploadProgress(null)
+        }, 2000)
         
-        console.log('✅ STEP 4: Feature save process completed!')
       } else {
         const errorData = await response.json()
-        console.error('❌ STEP 4: Save failed:', errorData)
-        alert(errorData.error || 'Failed to save feature')
+        
+        setUploadProgress({
+          stage: "error",
+          progress: 0,
+          message: errorData.message || "Save failed",
+          details: errorData.details
+        })
       }
     } catch (error) {
-      console.error("💥 STEP 4: Error saving feature:", error)
-      alert('An error occurred while saving the feature')
+      setUploadProgress({
+        stage: "error",
+        progress: 0,
+        message: "Network error occurred",
+        details: error instanceof Error ? error.message : 'Unknown error'
+      })
     } finally {
       setIsLoading(false)
     }
@@ -409,7 +392,13 @@ export default function AdminFeaturesPage() {
         </div>
       </div>
 
-
+      {/* Enhanced Info Banner */}
+      <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-950">
+        <Zap className="h-4 w-4 text-blue-600" />
+        <AlertDescription className="text-blue-800 dark:text-blue-200">
+          <strong>Enhanced Upload System:</strong> Supports TIFF files (auto-converted to JPEG), automatic image optimization for large files, and smart compression.
+        </AlertDescription>
+      </Alert>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -489,201 +478,121 @@ export default function AdminFeaturesPage() {
         </div>
       </div>
 
-      {/* Features Grid - 🔍 STEP 5: Display features */}
+      {/* Features Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredFeatures.map((feature) => {
-          console.log(`🔍 STEP 5: Rendering feature card: ${feature.title}`)
-          console.log(`🔍 STEP 5: Feature has image: ${!!feature.image}`)
-          console.log(`🔍 STEP 5: Feature image URL: ${feature.image}`)
-          
-          return (
-            <Card key={feature.id} className="group hover:shadow-lg transition-shadow duration-200">
-              <div className="relative">
-                {/* 🔍 IMAGE DISPLAY SECTION - DETAILED DEBUG */}
-                {feature.image ? (
-                  <div className="relative h-48 w-full overflow-hidden bg-gray-200">
-                    <img
-                      src={feature.image}
-                      alt={feature.title}
-                      className="w-full h-full object-cover rounded-t-lg"
-                      onLoad={(e) => {
-                        console.log(`✅ SUCCESS: Image loaded for "${feature.title}"`)
-                        console.log(`✅ Dimensions: ${e.currentTarget.naturalWidth}x${e.currentTarget.naturalHeight}`)
-                        console.log(`✅ URL: ${feature.image}`)
-                        e.currentTarget.style.opacity = '1'
-                        e.currentTarget.nextElementSibling?.classList.add('hidden') // Hide error fallback
-                        e.currentTarget.nextElementSibling?.nextElementSibling?.classList.add('hidden') // Hide loading
-                      }}
-                      onError={(e) => {
-                        console.error(`❌ FAILED: Image failed for "${feature.title}"`)
-                        console.error(`❌ URL: ${feature.image}`)
-                        console.error(`❌ Error details:`, e)
-                        e.currentTarget.style.display = 'none'
-                        e.currentTarget.nextElementSibling?.classList.remove('hidden') // Show error
-                        e.currentTarget.nextElementSibling?.nextElementSibling?.classList.add('hidden') // Hide loading
-                      }}
-                      style={{ 
-                        opacity: '0', 
-                        transition: 'opacity 0.3s',
-                        position: 'absolute',
-                        top: '0',
-                        left: '0',
-                        width: '100%',
-                        height: '100%'
-                      }}
-                    />
-                    
-                    {/* Error fallback */}
-                    <div className="hidden absolute inset-0 bg-red-100 flex items-center justify-center z-10">
-                      <div className="text-center">
-                        <ImageIcon className="h-8 w-8 text-red-400 mx-auto mb-1" />
-                        <p className="text-xs text-red-600">Failed to load</p>
-                        <button 
-                          onClick={() => window.open(feature.image, '_blank')}
-                          className="text-xs text-blue-600 underline mt-1"
-                        >
-                          Test URL
-                        </button>
-                      </div>
-                    </div>
-                    
-                    {/* Loading state */}
-                    <div className="absolute inset-0 bg-gray-300 flex items-center justify-center z-5">
-                      <div className="text-center">
-                        <Loader2 className="h-8 w-8 text-gray-500 mx-auto mb-1 animate-spin" />
-                        <p className="text-xs text-gray-600">Loading image...</p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {feature.image?.split('/').pop()?.substring(0, 15)}...
-                        </p>
-                        <button 
-                          onClick={() => {
-                            console.log(`🧪 MANUAL TEST: Testing URL for "${feature.title}"`)
-                            console.log(`🧪 URL: ${feature.image}`)
-                            window.open(feature.image, '_blank')
-                          }}
-                          className="text-xs text-blue-600 underline mt-1"
-                        >
-                          Test URL
-                        </button>
-                      </div>
-                    </div>
+        {filteredFeatures.map((feature) => (
+          <Card key={feature.id} className="group hover:shadow-lg transition-shadow duration-200">
+            <div className="relative">
+              {/* Image Display */}
+              {feature.image ? (
+                <div className="relative h-48 w-full overflow-hidden bg-gray-200">
+                  <img
+                    src={feature.image}
+                    alt={feature.title}
+                    className="w-full h-full object-cover rounded-t-lg"
+                    onLoad={(e) => {
+                      e.currentTarget.style.opacity = '1'
+                    }}
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none'
+                    }}
+                    style={{ 
+                      opacity: '0', 
+                      transition: 'opacity 0.3s'
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="h-48 bg-gray-100 dark:bg-gray-800 rounded-t-lg flex items-center justify-center">
+                  <div className="text-center">
+                    <ImageIcon className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+                    <p className="text-xs text-gray-500">No image</p>
                   </div>
-                ) : (
-                  <div className="h-48 bg-gray-100 dark:bg-gray-800 rounded-t-lg flex items-center justify-center">
-                    <div className="text-center">
-                      <ImageIcon className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                      <p className="text-xs text-gray-500">No image</p>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Status Badges */}
-                <div className="absolute top-3 left-3 flex space-x-2">
-                  {feature.featured && (
-                    <Badge className="bg-yellow-500 hover:bg-yellow-600">
-                      <Star className="h-3 w-3 mr-1" />
-                      Featured
-                    </Badge>
-                  )}
-                  <Badge variant={feature.published ? "default" : "secondary"}>
-                    {feature.published ? "Published" : "Draft"}
+                </div>
+              )}
+              
+              {/* Status Badges */}
+              <div className="absolute top-3 left-3 flex space-x-2">
+                {feature.featured && (
+                  <Badge className="bg-yellow-500 hover:bg-yellow-600">
+                    <Star className="h-3 w-3 mr-1" />
+                    Featured
                   </Badge>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                  <div className="flex space-x-1">
-                    {/* Test Image Button */}
-                    {feature.image && (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          console.log(`🧪 Testing image URL for: ${feature.title}`)
-                          console.log(`🧪 URL: ${feature.image}`)
-                          window.open(feature.image, '_blank')
-                        }}
-                        className="h-8 w-8 p-0"
-                        title="Test image URL in new tab"
-                      >
-                        🔗
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => handleEditFeature(feature)}
-                      className="h-8 w-8 p-0"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => handleDeleteFeature(feature.id)}
-                      className="h-8 w-8 p-0"
-                      disabled={isLoading}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
+                )}
+                <Badge variant={feature.published ? "default" : "secondary"}>
+                  {feature.published ? "Published" : "Draft"}
+                </Badge>
               </div>
 
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between mb-2">
-                  <h3 className="font-semibold text-lg text-gray-900 dark:text-white line-clamp-1">
-                    {feature.title}
-                  </h3>
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      checked={feature.published}
-                      onCheckedChange={() => {
-                        const updatedFeatures = features.map(f => 
-                          f.id === feature.id ? { ...f, published: !f.published } : f
-                        )
-                        setFeatures(updatedFeatures)
-                      }}
-                      size="sm"
-                    />
-                  </div>
+              {/* Action Buttons */}
+              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                <div className="flex space-x-1">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => handleEditFeature(feature)}
+                    className="h-8 w-8 p-0"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => handleDeleteFeature(feature.id)}
+                    className="h-8 w-8 p-0"
+                    disabled={isLoading}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
-                
-                <p className="text-gray-600 dark:text-gray-400 text-sm line-clamp-3 mb-3">
-                  {feature.description}
-                </p>
+              </div>
+            </div>
 
-                <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-2">
-                  <span>Order: {feature.order}</span>
-                  <span>{new Date(feature.createdAt).toLocaleDateString()}</span>
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between mb-2">
+                <h3 className="font-semibold text-lg text-gray-900 dark:text-white line-clamp-1">
+                  {feature.title}
+                </h3>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    checked={feature.published}
+                    onCheckedChange={() => {
+                      const updatedFeatures = features.map(f => 
+                        f.id === feature.id ? { ...f, published: !f.published } : f
+                      )
+                      setFeatures(updatedFeatures)
+                    }}
+                    size="sm"
+                  />
                 </div>
-                
-                {/* Image status indicator */}
-                <div className="flex items-center justify-between text-xs">
-                  {feature.image ? (
-                    <div className="flex items-center text-green-600">
-                      <ImageIcon className="h-3 w-3 mr-1" />
-                      <span>Image: ✅ ATTACHED</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center text-gray-400">
-                      <ImageIcon className="h-3 w-3 mr-1" />
-                      <span>Image: ❌ MISSING</span>
-                    </div>
-                  )}
-                  
-                  {/* Image URL display for debugging */}
-                  {feature.image && (
-                    <div className="text-xs text-blue-600 truncate max-w-32" title={feature.image}>
-                      {feature.image.substring(0, 20)}...
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )
-        })}
+              </div>
+              
+              <p className="text-gray-600 dark:text-gray-400 text-sm line-clamp-3 mb-3">
+                {feature.description}
+              </p>
+
+              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-2">
+                <span>Order: {feature.order}</span>
+                <span>{new Date(feature.createdAt).toLocaleDateString()}</span>
+              </div>
+              
+              {/* Image status indicator */}
+              <div className="flex items-center justify-between text-xs">
+                {feature.image ? (
+                  <div className="flex items-center text-green-600">
+                    <ImageIcon className="h-3 w-3 mr-1" />
+                    <span>Image: ✅ ATTACHED</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center text-gray-400">
+                    <ImageIcon className="h-3 w-3 mr-1" />
+                    <span>Image: ❌ MISSING</span>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       {/* Create/Edit Dialog */}
@@ -694,32 +603,131 @@ export default function AdminFeaturesPage() {
               {editingFeature ? "Edit Feature" : "Create New Feature"}
             </DialogTitle>
             <DialogDescription>
-              {editingFeature ? "Update feature information" : "Add a new feature to showcase your services"}
+              {editingFeature ? "Update feature information" : "Add a new feature. TIFF files will be automatically converted to JPEG."}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6">
-            {/* Basic Information */}
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="title">Title *</Label>
-                <Input
-                  id="title"
-                  placeholder="Enter feature title..."
-                  value={formData.title}
-                  onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                />
-              </div>
+            {/* Title */}
+            <div>
+              <Label htmlFor="title">Title *</Label>
+              <Input
+                id="title"
+                placeholder="Enter feature title..."
+                value={formData.title}
+                onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                className={errors.title ? "border-red-500" : ""}
+                disabled={isLoading}
+              />
+              {errors.title && (
+                <p className="text-sm text-red-500 mt-1">{errors.title}</p>
+              )}
+            </div>
 
-              <div>
-                <Label htmlFor="description">Description *</Label>
-                <Textarea
-                  id="description"
-                  placeholder="Describe this feature..."
-                  value={formData.description}
-                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                  rows={4}
-                />
+            {/* Description */}
+            <div>
+              <Label htmlFor="description">Description *</Label>
+              <Textarea
+                id="description"
+                placeholder="Describe this feature..."
+                value={formData.description}
+                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                rows={4}
+                className={errors.description ? "border-red-500" : ""}
+                disabled={isLoading}
+              />
+              {errors.description && (
+                <p className="text-sm text-red-500 mt-1">{errors.description}</p>
+              )}
+            </div>
+
+            {/* Image Upload */}
+            <div>
+              <Label htmlFor="image">Feature Image</Label>
+              <div className="mt-2">
+                {!imagePreview ? (
+                  <div className="border-2 border-dashed rounded-lg p-6 text-center border-gray-300">
+                    <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                    <div className="mt-4">
+                      <label htmlFor="image-upload" className="cursor-pointer">
+                        <span className="mt-2 block text-sm font-medium text-gray-900 dark:text-white">
+                          Click to upload feature image
+                        </span>
+                        <span className="mt-1 block text-xs text-gray-500">
+                          PNG, JPG, TIFF, WebP up to 50MB
+                        </span>
+                        <span className="mt-1 block text-xs text-blue-600">
+                          ✨ TIFF files will be automatically converted to JPEG
+                        </span>
+                      </label>
+                      <input
+                        id="image-upload"
+                        type="file"
+                        className="hidden"
+                        accept="image/*,.tif,.tiff"
+                        onChange={handleImageChange}
+                        disabled={isLoading}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="relative">
+                      <img
+                        src={imagePreview}
+                        alt="Preview"
+                        className="w-full h-48 object-cover rounded-lg"
+                      />
+                      <button
+                        type="button"
+                        onClick={removeImage}
+                        className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                        disabled={isLoading}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    
+                    {/* File Info */}
+                    {formData.image && (
+                      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                        <div className="flex items-center justify-between text-sm">
+                          <div className="flex items-center space-x-2">
+                            <FileImage className="h-4 w-4 text-blue-500" />
+                            <span className="font-medium">{formData.image.name}</span>
+                          </div>
+                          <span className="text-gray-500">{formatFileSize(formData.image.size)}</span>
+                        </div>
+                        
+                        {(() => {
+                          const { isTiff, isLarge } = getFileTypeInfo(formData.image!)
+                          return (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {isTiff && (
+                                <div className="flex items-center text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded">
+                                  <Zap className="h-3 w-3 mr-1" />
+                                  Will convert TIFF → JPEG
+                                </div>
+                              )}
+                              {isLarge && (
+                                <div className="flex items-center text-xs bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 px-2 py-1 rounded">
+                                  <Zap className="h-3 w-3 mr-1" />
+                                  Will optimize large file
+                                </div>
+                              )}
+                              {!isTiff && !isLarge && (
+                                <div className="flex items-center text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 px-2 py-1 rounded">
+                                  <CheckCircle className="h-3 w-3 mr-1" />
+                                  Ready to upload
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -730,6 +738,7 @@ export default function AdminFeaturesPage() {
                   id="published"
                   checked={formData.published}
                   onCheckedChange={(checked) => setFormData(prev => ({ ...prev, published: checked }))}
+                  disabled={isLoading}
                 />
                 <Label htmlFor="published">Published</Label>
               </div>
@@ -739,6 +748,7 @@ export default function AdminFeaturesPage() {
                   id="featured"
                   checked={formData.featured}
                   onCheckedChange={(checked) => setFormData(prev => ({ ...prev, featured: checked }))}
+                  disabled={isLoading}
                 />
                 <Label htmlFor="featured">Featured</Label>
               </div>
@@ -751,104 +761,99 @@ export default function AdminFeaturesPage() {
                   placeholder="0"
                   value={formData.order}
                   onChange={(e) => setFormData(prev => ({ ...prev, order: parseInt(e.target.value) || 0 }))}
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="icon">Icon (optional)</Label>
+                <Input
+                  id="icon"
+                  placeholder="e.g., camera, image, star"
+                  value={formData.icon}
+                  onChange={(e) => setFormData(prev => ({ ...prev, icon: e.target.value }))}
+                  disabled={isLoading}
                 />
               </div>
             </div>
 
-            {/* 🔍 FORM IMAGE DEBUG */}
-            <div className="space-y-4">
-              <Label>Feature Image</Label>
-              
-              {/* Current form state display */}
-              <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded text-xs">
-                <div><strong>Form Image State:</strong></div>
-                <div>Has Image: {!!formData.image ? '✅ YES' : '❌ NO'}</div>
-                <div>Image URL: {formData.image || 'None'}</div>
-                <div>Public ID: {formData.publicId || 'None'}</div>
-              </div>
-              
-              <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-6">
-                {formData.image ? (
-                  <div className="relative">
-                    <div className="relative h-48 w-full bg-gray-100 rounded-lg overflow-hidden border">
-                      <img
-                        src={formData.image}
-                        alt="Feature image preview"
-                        className="w-full h-full object-cover"
-                        onLoad={() => console.log('✅ FORM: Form image loaded successfully')}
-                        onError={(e) => {
-                          console.error('❌ FORM: Form image failed to load')
-                          console.error('❌ FORM: Image URL:', formData.image)
-                        }}
-                      />
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => {
-                        console.log('🗑️ FORM: Removing image from form')
-                        setFormData(prev => ({ ...prev, image: "", publicId: "" }))
-                      }}
-                      className="absolute top-2 right-2"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="text-center">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="hidden"
-                      id="image-upload"
-                      disabled={isLoading}
-                    />
-                    <label htmlFor="image-upload">
-                      <Button 
-                        type="button"
-                        variant="outline" 
-                        className="w-full cursor-pointer"
-                        disabled={isLoading}
-                        asChild
-                      >
-                        <span>
-                          {isLoading ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Uploading...
-                            </>
-                          ) : (
-                            <>
-                              <Upload className="h-4 w-4 mr-2" />
-                              Upload Image
-                            </>
+            {/* Upload Progress */}
+            {uploadProgress && (
+              <Alert className={`${
+                uploadProgress.stage === "error" ? "border-red-500 bg-red-50 dark:bg-red-950" :
+                uploadProgress.stage === "complete" ? "border-green-500 bg-green-50 dark:bg-green-950" :
+                "border-blue-500 bg-blue-50 dark:bg-blue-950"
+              }`}>
+                <div className="flex items-center space-x-2">
+                  {uploadProgress.stage === "error" ? (
+                    <AlertCircle className="h-4 w-4 text-red-600" />
+                  ) : uploadProgress.stage === "complete" ? (
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                  )}
+                  <AlertDescription className="flex-1">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">{uploadProgress.message}</span>
+                        <span className="text-sm text-gray-500">{uploadProgress.progress}%</span>
+                      </div>
+                      
+                      {uploadProgress.stage !== "error" && uploadProgress.stage !== "complete" && (
+                        <Progress value={uploadProgress.progress} className="w-full" />
+                      )}
+                      
+                      {uploadProgress.details && uploadProgress.stage === "complete" && (
+                        <div className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+                          {uploadProgress.details.wasConverted && (
+                            <div>✅ Converted from {uploadProgress.details.originalFormat} to {uploadProgress.details.finalFormat}</div>
                           )}
-                        </span>
-                      </Button>
-                    </label>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                      Upload an image to represent this feature (max 10MB)
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
+                          {uploadProgress.details.wasOptimized && (
+                            <div>🎯 Optimized: {(uploadProgress.details.originalSize / 1024 / 1024).toFixed(2)}MB → {(uploadProgress.details.finalSize / 1024 / 1024).toFixed(2)}MB</div>
+                          )}
+                        </div>
+                      )}
+                      
+                      {uploadProgress.details && uploadProgress.stage === "error" && (
+                        <div className="text-xs text-red-600 dark:text-red-400 mt-2">
+                          {typeof uploadProgress.details === 'string' ? uploadProgress.details : JSON.stringify(uploadProgress.details)}
+                        </div>
+                      )}
+                    </div>
+                  </AlertDescription>
+                </div>
+              </Alert>
+            )}
 
             {/* Actions */}
             <div className="flex justify-end space-x-2 pt-4 border-t">
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+              <Button 
+                variant="outline" 
+                onClick={() => setIsDialogOpen(false)}
+                disabled={isLoading}
+              >
                 Cancel
               </Button>
-              <Button onClick={handleSaveFeature} disabled={isLoading}>
+              <Button 
+                onClick={handleSaveFeature} 
+                disabled={isLoading || uploadProgress?.stage === "complete"}
+              >
                 {isLoading ? (
                   <>
                     <Loader2 className="animate-spin h-4 w-4 mr-2" />
-                    Saving...
+                    {uploadProgress?.stage === "converting" ? "Converting..." :
+                     uploadProgress?.stage === "optimizing" ? "Optimizing..." :
+                     uploadProgress?.stage === "uploading" ? "Uploading..." :
+                     "Processing..."}
+                  </>
+                ) : uploadProgress?.stage === "complete" ? (
+                  <>
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Saved Successfully!
                   </>
                 ) : (
                   <>
-                    <Save className="h-4 w-4 mr-2" />
+                    <Plus className="h-4 w-4 mr-2" />
                     {editingFeature ? "Update" : "Create"} Feature
                   </>
                 )}

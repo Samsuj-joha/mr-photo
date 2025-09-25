@@ -1,6 +1,5 @@
-// File: src/app/admin/blog/page.tsx
-// Enhanced admin blog management with additional features
 
+// src/app/admin/blog/page.tsx - COMPLETE VERSION with TIFF Support
 "use client"
 
 import { useState, useEffect } from "react"
@@ -13,6 +12,8 @@ import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Progress } from "@/components/ui/progress"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,13 +30,17 @@ import {
   EyeOff,
   Star,
   Calendar,
-  Tag,
   Search,
   Filter,
   MoreVertical,
   Copy,
   ExternalLink,
-  BarChart3
+  BarChart3,
+  X,
+  CheckCircle,
+  AlertCircle,
+  FileImage,
+  Zap
 } from "lucide-react"
 import Image from "next/image"
 
@@ -53,14 +58,21 @@ interface Blog {
   updatedAt: string
 }
 
+interface UploadProgress {
+  stage: string
+  progress: number
+  message: string
+  details?: any
+}
+
 export default function AdminBlog() {
   const [blogs, setBlogs] = useState<Blog[]>([])
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [editingBlog, setEditingBlog] = useState<Blog | null>(null)
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
-  const [filterStatus, setFilterStatus] = useState("all") // all, published, draft, featured
-  const [sortBy, setSortBy] = useState("newest") // newest, oldest, title
+  const [filterStatus, setFilterStatus] = useState("all")
+  const [sortBy, setSortBy] = useState("newest")
 
   // Fetch blogs
   useEffect(() => {
@@ -166,58 +178,53 @@ export default function AdminBlog() {
     alert('Blog URL copied to clipboard!')
   }
 
-  // Create/Edit Blog Form Component
+  // Blog Form Component
   const BlogForm = ({ blog }: { blog?: Blog }) => {
     const [title, setTitle] = useState(blog?.title || "")
     const [excerpt, setExcerpt] = useState(blog?.excerpt || "")
     const [content, setContent] = useState(blog?.content || "")
-    const [coverImage, setCoverImage] = useState(blog?.coverImage || "")
+    const [coverImageFile, setCoverImageFile] = useState<File | null>(null)
+    const [coverImagePreview, setCoverImagePreview] = useState(blog?.coverImage || "")
     const [tags, setTags] = useState(blog?.tags.join(", ") || "")
     const [featured, setFeatured] = useState(blog?.featured || false)
     const [published, setPublished] = useState(blog?.published || false)
-    const [isUploading, setIsUploading] = useState(false)
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null)
 
-    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0]
-      if (!file) return
-
-      if (!file.type.startsWith('image/')) {
-        alert('Please select an image file')
-        return
-      }
-
-      const maxSize = 10 * 1024 * 1024
-      if (file.size > maxSize) {
-        alert('Image must be less than 10MB')
-        return
-      }
-
-      setIsUploading(true)
-
-      try {
-        const formData = new FormData()
-        formData.append('file', file)
-
-        const response = await fetch('/api/blog-upload', {
-          method: 'POST',
-          body: formData
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setCoverImage(data.url)
-        } else {
-          const errorText = await response.text()
-          alert('Upload failed: ' + errorText)
+      if (file) {
+        setCoverImageFile(file)
+        
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          setCoverImagePreview(e.target?.result as string)
         }
-      } catch (error) {
-        console.error('Upload error:', error)
-        alert('Upload error: ' + error)
-      } finally {
-        setIsUploading(false)
-        e.target.value = ''
+        reader.readAsDataURL(file)
       }
+    }
+
+    const removeImage = () => {
+      setCoverImageFile(null)
+      setCoverImagePreview(blog?.coverImage || "")
+    }
+
+    const formatFileSize = (bytes: number) => {
+      if (bytes < 1024 * 1024) {
+        return (bytes / 1024).toFixed(1) + ' KB'
+      }
+      return (bytes / (1024 * 1024)).toFixed(2) + ' MB'
+    }
+
+    const getFileTypeInfo = (file: File) => {
+      const isTiff = file.type === 'image/tiff' || 
+                    file.type === 'image/tif' || 
+                    file.name.toLowerCase().endsWith('.tif') || 
+                    file.name.toLowerCase().endsWith('.tiff')
+      
+      const isLarge = file.size > 10 * 1024 * 1024
+      
+      return { isTiff, isLarge }
     }
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -229,29 +236,98 @@ export default function AdminBlog() {
       }
 
       setIsSubmitting(true)
+      setUploadProgress({
+        stage: "preparing",
+        progress: 0,
+        message: "Preparing to save blog post..."
+      })
       
       try {
-        const blogData = {
-          title,
-          excerpt: excerpt || null,
-          content,
-          coverImage: coverImage || null,
-          tags: tags.split(',').map(tag => tag.trim()).filter(tag => tag),
-          featured,
-          published,
+        const formData = new FormData()
+        formData.append('title', title)
+        formData.append('excerpt', excerpt || '')
+        formData.append('content', content)
+        formData.append('tags', tags)
+        formData.append('featured', featured.toString())
+        formData.append('published', published.toString())
+        
+        if (coverImageFile) {
+          formData.append('coverImage', coverImageFile)
+          
+          const { isTiff, isLarge } = getFileTypeInfo(coverImageFile)
+          const fileSizeMB = (coverImageFile.size / (1024 * 1024)).toFixed(2)
+          
+          if (isTiff) {
+            setUploadProgress({
+              stage: "converting",
+              progress: 20,
+              message: `Converting TIFF file (${fileSizeMB}MB) to JPEG...`,
+              details: { originalFormat: "TIFF", targetFormat: "JPEG" }
+            })
+          } else if (isLarge) {
+            setUploadProgress({
+              stage: "optimizing",
+              progress: 20,
+              message: `Optimizing large file (${fileSizeMB}MB)...`,
+              details: { originalSize: fileSizeMB + "MB" }
+            })
+          } else {
+            setUploadProgress({
+              stage: "uploading",
+              progress: 30,
+              message: "Uploading to cloud storage..."
+            })
+          }
         }
+
+        // Progress simulation
+        const progressInterval = setInterval(() => {
+          setUploadProgress(prev => {
+            if (!prev) return null
+            const newProgress = Math.min(prev.progress + 15, 85)
+            
+            if (prev.stage === "converting" && newProgress > 50) {
+              return {
+                stage: "uploading",
+                progress: newProgress,
+                message: "Uploading converted image..."
+              }
+            }
+            
+            if (prev.stage === "optimizing" && newProgress > 50) {
+              return {
+                stage: "uploading",
+                progress: newProgress,
+                message: "Uploading optimized image..."
+              }
+            }
+            
+            return {
+              ...prev,
+              progress: newProgress
+            }
+          })
+        }, 800)
 
         const url = blog ? `/api/admin/blogs/${blog.id}` : '/api/admin/blogs'
         const method = blog ? 'PATCH' : 'POST'
 
         const response = await fetch(url, {
           method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(blogData)
+          body: formData
         })
+
+        clearInterval(progressInterval)
 
         if (response.ok) {
           const savedBlog = await response.json()
+          
+          setUploadProgress({
+            stage: "complete",
+            progress: 100,
+            message: savedBlog.message || `Blog ${blog ? 'updated' : 'created'} successfully!`,
+            details: savedBlog.uploadDetails
+          })
           
           if (blog) {
             setBlogs(prev => prev.map(b => b.id === blog.id ? savedBlog : b))
@@ -266,18 +342,33 @@ export default function AdminBlog() {
             setTitle("")
             setExcerpt("")
             setContent("")
-            setCoverImage("")
+            setCoverImageFile(null)
+            setCoverImagePreview("")
             setTags("")
             setFeatured(false)
             setPublished(false)
           }
 
-          alert(blog ? 'Blog updated successfully!' : 'Blog created successfully!')
+          setTimeout(() => {
+            setUploadProgress(null)
+          }, 2000)
+
         } else {
-          alert(blog ? 'Failed to update blog' : 'Failed to create blog')
+          const errorData = await response.json()
+          setUploadProgress({
+            stage: "error",
+            progress: 0,
+            message: errorData.message || `Failed to ${blog ? 'update' : 'create'} blog`,
+            details: errorData.details
+          })
         }
       } catch (error) {
-        alert(blog ? 'Error updating blog' : 'Error creating blog')
+        setUploadProgress({
+          stage: "error",
+          progress: 0,
+          message: "Network error occurred",
+          details: error instanceof Error ? error.message : 'Unknown error'
+        })
       } finally {
         setIsSubmitting(false)
       }
@@ -285,84 +376,121 @@ export default function AdminBlog() {
 
     return (
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="md:col-span-2">
-            <Label htmlFor="title">Title *</Label>
-            <Input
-              id="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Blog post title"
-              required
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <Label htmlFor="excerpt">Excerpt</Label>
-            <Textarea
-              id="excerpt"
-              value={excerpt}
-              onChange={(e) => setExcerpt(e.target.value)}
-              placeholder="Short description for the blog post"
-              rows={2}
-            />
-          </div>
+        <div>
+          <Label htmlFor="title">Title *</Label>
+          <Input
+            id="title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Blog post title"
+            required
+            disabled={isSubmitting}
+          />
         </div>
 
-        {/* Cover Image Upload */}
+        <div>
+          <Label htmlFor="excerpt">Excerpt</Label>
+          <Textarea
+            id="excerpt"
+            value={excerpt}
+            onChange={(e) => setExcerpt(e.target.value)}
+            placeholder="Short description for the blog post"
+            rows={2}
+            disabled={isSubmitting}
+          />
+        </div>
+
+        {/* Enhanced Cover Image Upload */}
         <div>
           <Label>Cover Image</Label>
-          <div className="space-y-4">
-            {coverImage && (
-              <div className="relative w-full h-48 rounded-lg overflow-hidden border">
-                <Image
-                  src={coverImage}
-                  alt="Cover image preview"
-                  fill
-                  className="object-cover"
-                />
-                <div className="absolute top-2 right-2">
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => setCoverImage("")}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+          <div className="mt-2">
+            {!coverImagePreview ? (
+              <div className="border-2 border-dashed rounded-lg p-6 text-center border-gray-300">
+                <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                <div className="mt-4">
+                  <label htmlFor="image-upload" className="cursor-pointer">
+                    <span className="mt-2 block text-sm font-medium text-gray-900 dark:text-white">
+                      Click to upload cover image
+                    </span>
+                    <span className="mt-1 block text-xs text-gray-500">
+                      PNG, JPG, TIFF, WebP up to 50MB
+                    </span>
+                    <span className="mt-1 block text-xs text-blue-600">
+                      ✨ TIFF files will be automatically converted to JPEG
+                    </span>
+                  </label>
+                  <input
+                    id="image-upload"
+                    type="file"
+                    className="hidden"
+                    accept="image/*,.tif,.tiff"
+                    onChange={handleImageChange}
+                    disabled={isSubmitting}
+                  />
                 </div>
               </div>
-            )}
-
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
-              <div className="text-center">
-                <Upload className="mx-auto h-8 w-8 text-gray-400 mb-2" />
-                
-                {isUploading ? (
-                  <div className="flex items-center justify-center space-x-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="text-sm">Uploading...</span>
+            ) : (
+              <div className="space-y-3">
+                <div className="relative w-full h-48 rounded-lg overflow-hidden border">
+                  <Image
+                    src={coverImagePreview}
+                    alt="Cover image preview"
+                    fill
+                    className="object-cover"
+                  />
+                  <div className="absolute top-2 right-2">
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      onClick={removeImage}
+                      disabled={isSubmitting}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
                   </div>
-                ) : (
-                  <>
-                    <label htmlFor="imageUpload" className="cursor-pointer">
-                      <span className="text-blue-600 hover:text-blue-500 font-medium">
-                        Click to upload image
-                      </span>
-                    </label>
-                    <input
-                      id="imageUpload"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      disabled={isUploading}
-                      className="hidden"
-                    />
-                    <p className="text-xs text-gray-500 mt-2">PNG, JPG, WebP up to 10MB</p>
-                  </>
+                </div>
+
+                {/* File Info */}
+                {coverImageFile && (
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center space-x-2">
+                        <FileImage className="h-4 w-4 text-blue-500" />
+                        <span className="font-medium">{coverImageFile.name}</span>
+                      </div>
+                      <span className="text-gray-500">{formatFileSize(coverImageFile.size)}</span>
+                    </div>
+                    
+                    {(() => {
+                      const { isTiff, isLarge } = getFileTypeInfo(coverImageFile!)
+                      return (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {isTiff && (
+                            <div className="flex items-center text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded">
+                              <Zap className="h-3 w-3 mr-1" />
+                              Will convert TIFF → JPEG
+                            </div>
+                          )}
+                          {isLarge && (
+                            <div className="flex items-center text-xs bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 px-2 py-1 rounded">
+                              <Zap className="h-3 w-3 mr-1" />
+                              Will optimize large file
+                            </div>
+                          )}
+                          {!isTiff && !isLarge && (
+                            <div className="flex items-center text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 px-2 py-1 rounded">
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Ready to upload
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
+                  </div>
                 )}
               </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -375,6 +503,7 @@ export default function AdminBlog() {
             placeholder="Blog post content"
             rows={8}
             required
+            disabled={isSubmitting}
           />
         </div>
 
@@ -385,6 +514,7 @@ export default function AdminBlog() {
             value={tags}
             onChange={(e) => setTags(e.target.value)}
             placeholder="photography, wedding, tips"
+            disabled={isSubmitting}
           />
         </div>
 
@@ -399,6 +529,7 @@ export default function AdminBlog() {
               id="featured"
               checked={featured}
               onCheckedChange={setFeatured}
+              disabled={isSubmitting}
             />
           </div>
 
@@ -411,9 +542,58 @@ export default function AdminBlog() {
               id="published"
               checked={published}
               onCheckedChange={setPublished}
+              disabled={isSubmitting}
             />
           </div>
         </div>
+
+        {/* Upload Progress */}
+        {uploadProgress && (
+          <Alert className={`${
+            uploadProgress.stage === "error" ? "border-red-500 bg-red-50 dark:bg-red-950" :
+            uploadProgress.stage === "complete" ? "border-green-500 bg-green-50 dark:bg-green-950" :
+            "border-blue-500 bg-blue-50 dark:bg-blue-950"
+          }`}>
+            <div className="flex items-center space-x-2">
+              {uploadProgress.stage === "error" ? (
+                <AlertCircle className="h-4 w-4 text-red-600" />
+              ) : uploadProgress.stage === "complete" ? (
+                <CheckCircle className="h-4 w-4 text-green-600" />
+              ) : (
+                <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+              )}
+              <AlertDescription className="flex-1">
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium">{uploadProgress.message}</span>
+                    <span className="text-sm text-gray-500">{uploadProgress.progress}%</span>
+                  </div>
+                  
+                  {uploadProgress.stage !== "error" && uploadProgress.stage !== "complete" && (
+                    <Progress value={uploadProgress.progress} className="w-full" />
+                  )}
+                  
+                  {uploadProgress.details && uploadProgress.stage === "complete" && (
+                    <div className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+                      {uploadProgress.details.wasConverted && (
+                        <div>✅ Converted from {uploadProgress.details.originalFormat} to {uploadProgress.details.finalFormat}</div>
+                      )}
+                      {uploadProgress.details.wasOptimized && (
+                        <div>🎯 Optimized: {(uploadProgress.details.originalSize / 1024 / 1024).toFixed(2)}MB → {(uploadProgress.details.finalSize / 1024 / 1024).toFixed(2)}MB</div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {uploadProgress.details && uploadProgress.stage === "error" && (
+                    <div className="text-xs text-red-600 dark:text-red-400 mt-2">
+                      {typeof uploadProgress.details === 'string' ? uploadProgress.details : JSON.stringify(uploadProgress.details)}
+                    </div>
+                  )}
+                </div>
+              </AlertDescription>
+            </div>
+          </Alert>
+        )}
 
         <div className="flex justify-end space-x-2 pt-4">
           <Button 
@@ -426,13 +606,33 @@ export default function AdminBlog() {
                 setIsCreateModalOpen(false)
               }
             }}
-            disabled={isSubmitting || isUploading}
+            disabled={isSubmitting}
           >
             Cancel
           </Button>
-          <Button type="submit" disabled={isSubmitting || isUploading}>
-            {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            {isSubmitting ? (blog ? 'Updating...' : 'Creating...') : (blog ? 'Update Blog' : 'Create Blog')}
+          <Button 
+            type="submit" 
+            disabled={isSubmitting || uploadProgress?.stage === "complete"}
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                {uploadProgress?.stage === "converting" ? "Converting..." :
+                 uploadProgress?.stage === "optimizing" ? "Optimizing..." :
+                 uploadProgress?.stage === "uploading" ? "Uploading..." :
+                 "Processing..."}
+              </>
+            ) : uploadProgress?.stage === "complete" ? (
+              <>
+                <CheckCircle className="h-4 w-4 mr-2" />
+                {blog ? 'Updated!' : 'Created!'}
+              </>
+            ) : (
+              <>
+                <Plus className="h-4 w-4 mr-2" />
+                {blog ? 'Update Blog' : 'Create Blog'}
+              </>
+            )}
           </Button>
         </div>
       </form>
@@ -471,13 +671,21 @@ export default function AdminBlog() {
             <DialogHeader>
               <DialogTitle>Create New Blog Post</DialogTitle>
               <DialogDescription>
-                Create engaging content for your photography blog
+                Create engaging content for your photography blog. TIFF files will be automatically converted to JPEG.
               </DialogDescription>
             </DialogHeader>
             <BlogForm />
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Enhanced Info Banner */}
+      <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-950">
+        <Zap className="h-4 w-4 text-blue-600" />
+        <AlertDescription className="text-blue-800 dark:text-blue-200">
+          <strong>Enhanced Upload System:</strong> Supports TIFF files (auto-converted to JPEG), automatic image optimization for large files, and smart compression.
+        </AlertDescription>
+      </Alert>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -596,7 +804,7 @@ export default function AdminBlog() {
                     )}
                   </div>
 
-                  {/* Content */}
+                   {/* Content */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -718,7 +926,7 @@ export default function AdminBlog() {
           <DialogHeader>
             <DialogTitle>Edit Blog Post</DialogTitle>
             <DialogDescription>
-              Update your blog post content and settings
+              Update your blog post content and settings. TIFF files will be automatically converted to JPEG.
             </DialogDescription>
           </DialogHeader>
           {editingBlog && <BlogForm blog={editingBlog} />}

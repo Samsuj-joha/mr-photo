@@ -173,8 +173,8 @@ export default function GalleryPage() {
   const displayImages = images.slice(0, imagesPerPage)
 
   return (
-    <div className="min-h-screen dark:bg-gray-900">
-      <div className="max-w-7xl  py-8">
+    <div className="min-h-screen ">
+      <div className="max-w-auto  py-8">
         
         {/* Filters Section */}
         <div className="mb-8">
@@ -238,3 +238,5 @@ export default function GalleryPage() {
     </div>
   )
 }
+
+

@@ -542,7 +542,7 @@ function CreateGalleryForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6 overflow-y-auto">
       {/* Upload Progress */}
       {uploading && (
         <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
