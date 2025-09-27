@@ -71,10 +71,8 @@
 
 
 
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Required for Azure App Service
   output: 'standalone',
   
   eslint: {
@@ -104,7 +102,6 @@ const nextConfig = {
     largePageDataBytes: 128 * 100000,
   },
 
-  // Moved outside experimental section
   serverExternalPackages: ['cloudinary'],
 
   env: {
