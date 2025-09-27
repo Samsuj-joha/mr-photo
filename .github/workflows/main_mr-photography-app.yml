@@ -52,4 +52,4 @@ jobs:
           app-name: 'mr-photography-app'
           slot-name: 'Production'
           package: .
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_9B32FB70EE9B4E898A7DB1191AC0A94F }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_A60088C667A340BE8B4F9AC8FFB5DDDC }}
