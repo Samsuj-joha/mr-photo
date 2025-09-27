@@ -1,17 +1,88 @@
+// /** @type {import('next').NextConfig} */
+// const nextConfig = {
+//   // Force disable ALL error checking for deployment
+//   eslint: {
+//     ignoreDuringBuilds: true,
+//   },
+  
+//   // Ignore ALL TypeScript errors during build
+//   typescript: {
+//     ignoreBuildErrors: true,
+//   },
+
+//   // Disable type checking completely
+//   swcMinify: false,
+
+//   images: {
+//     domains: ['res.cloudinary.com', 'images.unsplash.com'],
+//     formats: ['image/webp', 'image/avif'],
+//     remotePatterns: [
+//       {
+//         protocol: 'https',
+//         hostname: 'res.cloudinary.com',
+//       },
+//       {
+//         protocol: 'https',
+//         hostname: 'images.unsplash.com',
+//       },
+//     ],
+//   },
+
+//   // Simplified experimental config
+//   experimental: {
+//     serverActions: {
+//       allowedOrigins: ["localhost:3000", "mr-photo-eta.vercel.app"]
+//     }
+//   },
+
+//   // External packages
+//   serverExternalPackages: ['cloudinary'],
+
+//   // Headers
+//   async headers() {
+//     return [
+//       {
+//         source: '/uploads/pdfs/:path*.pdf',
+//         headers: [
+//           {
+//             key: 'Content-Type',
+//             value: 'application/pdf',
+//           },
+//           {
+//             key: 'Content-Disposition',
+//             value: 'inline',
+//           },
+//           {
+//             key: 'Cache-Control',
+//             value: 'public, max-age=31536000',
+//           },
+//           {
+//             key: 'X-Content-Type-Options',
+//             value: 'nosniff',
+//           },
+//         ],
+//       },
+//     ];
+//   },
+// };
+
+// module.exports = nextConfig;
+
+
+
+
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Force disable ALL error checking for deployment
+  // Required for Azure App Service
+  output: 'standalone',
+  
   eslint: {
     ignoreDuringBuilds: true,
   },
-  
-  // Ignore ALL TypeScript errors during build
   typescript: {
     ignoreBuildErrors: true,
   },
-
-  // Disable type checking completely
-  swcMinify: false,
 
   images: {
     domains: ['res.cloudinary.com', 'images.unsplash.com'],
@@ -28,17 +99,17 @@ const nextConfig = {
     ],
   },
 
-  // Simplified experimental config
   experimental: {
-    serverActions: {
-      allowedOrigins: ["localhost:3000", "mr-photo-eta.vercel.app"]
-    }
+    serverActions: true,
+    serverComponentsExternalPackages: ['cloudinary'],
+    largePageDataBytes: 128 * 100000,
   },
 
-  // External packages
-  serverExternalPackages: ['cloudinary'],
+  env: {
+    NEXTAUTH_URL: process.env.NEXTAUTH_URL,
+    NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
+  },
 
-  // Headers
   async headers() {
     return [
       {
