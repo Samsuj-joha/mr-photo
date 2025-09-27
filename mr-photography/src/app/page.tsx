@@ -19,7 +19,7 @@ export default async function HomePage() {
   const sliderImages = await getSliderImages()
 
   return (
-    <div className="min-h-screen">
+    <div className="">
       {/* Hero Slider Section */}
       <section className="relative">
         <HomeSlider 
@@ -29,22 +29,9 @@ export default async function HomePage() {
         />
       </section>
 
-      {/* Fallback when no images */}
-      {sliderImages.length === 0 && (
-        <div className="flex items-center justify-center min-h-[50vh] bg-gray-100 dark:bg-gray-800">
-          <div className="text-center">
-            <h1 className="text-4xl font-light text-gray-900 dark:text-white mb-4">
-              Welcome to MR Photography
-            </h1>
-            <p className="text-lg text-gray-600 dark:text-gray-400">
-              Professional photography services coming soon...
-            </p>
-          </div>
-        </div>
-      )}
+
     </div>
   )
 }
-
 
 

@@ -358,7 +358,7 @@ export default function FeaturesPage() {
 
   return (
     <>
-      <div className="min-h-screen pt-8 dark:bg-gray-900">
+      <div className="min-h-screen pt-8 ">
         <div className="w-full">
           {/* Header Section */}
           <div className="mb-12 px-4">
