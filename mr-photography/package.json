@@ -2,6 +2,7 @@
   "name": "mr-photography",
   "version": "0.1.0",
   "private": true,
+  "_comment": "Force rebuild 2025-09-27",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "prisma generate && next build",
