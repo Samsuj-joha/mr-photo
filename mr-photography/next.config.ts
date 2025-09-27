@@ -73,7 +73,7 @@
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
+  // Remove output: 'standalone' line
   
   eslint: {
     ignoreDuringBuilds: true,
