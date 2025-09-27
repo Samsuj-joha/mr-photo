@@ -71,10 +71,80 @@
 
 
 
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  // Remove output: 'standalone' line
+// /** @type {import('next').NextConfig} */
+// const nextConfig = {
+//   // Remove output: 'standalone' line
   
+//   eslint: {
+//     ignoreDuringBuilds: true,
+//   },
+//   typescript: {
+//     ignoreBuildErrors: true,
+//   },
+
+//   images: {
+//     domains: ['res.cloudinary.com', 'images.unsplash.com'],
+//     formats: ['image/webp', 'image/avif'],
+//     remotePatterns: [
+//       {
+//         protocol: 'https',
+//         hostname: 'res.cloudinary.com',
+//       },
+//       {
+//         protocol: 'https',
+//         hostname: 'images.unsplash.com',
+//       },
+//     ],
+//   },
+
+//   experimental: {
+//     serverActions: true,
+//     largePageDataBytes: 128 * 100000,
+//   },
+
+//   serverExternalPackages: ['cloudinary'],
+
+//   env: {
+//     NEXTAUTH_URL: process.env.NEXTAUTH_URL,
+//     NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
+//   },
+
+//   async headers() {
+//     return [
+//       {
+//         source: '/uploads/pdfs/:path*.pdf',
+//         headers: [
+//           {
+//             key: 'Content-Type',
+//             value: 'application/pdf',
+//           },
+//           {
+//             key: 'Content-Disposition',
+//             value: 'inline',
+//           },
+//           {
+//             key: 'Cache-Control',
+//             value: 'public, max-age=31536000',
+//           },
+//           {
+//             key: 'X-Content-Type-Options',
+//             value: 'nosniff',
+//           },
+//         ],
+//       },
+//     ];
+//   },
+// };
+
+// module.exports = nextConfig;
+
+
+
+
+
+import type { NextConfig } from 'next'
+
+const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -86,19 +156,13 @@ const nextConfig = {
     domains: ['res.cloudinary.com', 'images.unsplash.com'],
     formats: ['image/webp', 'image/avif'],
     remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'res.cloudinary.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'images.unsplash.com',
-      },
+      { protocol: 'https', hostname: 'res.cloudinary.com' },
+      { protocol: 'https', hostname: 'images.unsplash.com' },
     ],
   },
 
   experimental: {
-    serverActions: true,
+    serverActions: {}, // ✅ must be an object
     largePageDataBytes: 128 * 100000,
   },
 
@@ -114,26 +178,14 @@ const nextConfig = {
       {
         source: '/uploads/pdfs/:path*.pdf',
         headers: [
-          {
-            key: 'Content-Type',
-            value: 'application/pdf',
-          },
-          {
-            key: 'Content-Disposition',
-            value: 'inline',
-          },
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000',
-          },
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
+          { key: 'Content-Type', value: 'application/pdf' },
+          { key: 'Content-Disposition', value: 'inline' },
+          { key: 'Cache-Control', value: 'public, max-age=31536000' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
         ],
       },
-    ];
+    ]
   },
-};
+}
 
-module.exports = nextConfig;
+export default nextConfig
