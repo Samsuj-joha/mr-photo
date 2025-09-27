@@ -2,11 +2,11 @@
   "name": "mr-photography",
   "version": "0.1.0",
   "private": true,
-  "_comment": "Force rebuild 2025-09-27",
+  "_comment": "Custom server approach",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "prisma generate && next build",
-    "start": "node ./node_modules/next/dist/bin/next start -p ${PORT:-8080}",
+    "start": "node server.js",
     "lint": "echo 'Linting skipped'",
     "postinstall": "prisma generate"
   },
