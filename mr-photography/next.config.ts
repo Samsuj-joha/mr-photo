@@ -101,9 +101,11 @@ const nextConfig = {
 
   experimental: {
     serverActions: true,
-    serverComponentsExternalPackages: ['cloudinary'],
     largePageDataBytes: 128 * 100000,
   },
+
+  // Moved outside experimental section
+  serverExternalPackages: ['cloudinary'],
 
   env: {
     NEXTAUTH_URL: process.env.NEXTAUTH_URL,
