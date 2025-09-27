@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "prisma generate && next build",
-    "start": "npx next start -p ${PORT:-8080}",
+    "start": "node ./node_modules/next/dist/bin/next start -p ${PORT:-8080}",
     "lint": "echo 'Linting skipped'",
     "postinstall": "prisma generate"
   },
