@@ -269,9 +269,6 @@
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Remove standalone for now - it's causing issues
-  // output: 'standalone',
-  
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -295,7 +292,9 @@ const nextConfig = {
   },
 
   experimental: {
-    serverActions: true,
+    serverActions: {
+      allowedOrigins: ["*"]
+    },
     largePageDataBytes: 128 * 100000,
   },
 

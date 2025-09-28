@@ -30,50 +30,29 @@ jobs:
           npm ci
           npm run build
           
-      - name: Verify build output
+      - name: Verify and copy build
         run: |
           cd ${{ env.LOCAL_APP_DIR }}
-          echo "Checking build output..."
-          ls -la .next/ || echo ".next directory not found"
-          ls -la .next/standalone/ || echo ".next/standalone directory not found"
+          echo "=== Build verification ==="
+          ls -la
+          echo "=== .next directory ==="
+          ls -la .next/ || echo "ERROR: .next directory not found!"
           
-      - name: Prepare deployment package
-        run: |
-          cd ${{ env.LOCAL_APP_DIR }}
-          # Create deployment directory
-          mkdir -p deploy
+          echo "=== Creating deployment package ==="
+          # Copy everything needed for deployment
+          cp -r . ../deploy
+          cd ../deploy
           
-          # Copy all necessary files
-          cp package.json deploy/
-          cp package-lock.json deploy/
-          cp next.config.js deploy/ || true
-          cp server.js deploy/ || true
-          
-          # Copy the entire .next directory (both standalone and regular)
-          if [ -d ".next/standalone" ]; then
-            echo "Using standalone build"
-            cp -r .next/standalone/* deploy/
-            cp -r .next/static deploy/.next/static
-          else
-            echo "Using regular build"
-            cp -r .next deploy/
-            cp -r node_modules deploy/
-          fi
-          
-          # Copy public directory
-          cp -r public deploy/ || true
-          
-          # Copy prisma if exists
-          cp -r prisma deploy/ || true
-          
-          echo "Deployment package contents:"
-          ls -la deploy/
+          echo "=== Deployment package contents ==="
+          ls -la
+          echo "=== .next in deployment ==="
+          ls -la .next/ || echo "ERROR: .next missing in deployment!"
           
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: ./${{ env.LOCAL_APP_DIR }}/deploy
+          path: ./deploy
 
   deploy:
     runs-on: ubuntu-latest
@@ -90,9 +69,12 @@ jobs:
 
       - name: Verify deployment package
         run: |
-          echo "Deployment package contents:"
+          echo "=== Deployment verification ==="
           ls -la
-          ls -la .next/ || echo ".next directory not found in deployment"
+          echo "=== Checking .next ==="
+          ls -la .next/ || echo "ERROR: .next directory missing!"
+          echo "=== Checking server.js ==="
+          ls -la server.js || echo "WARNING: server.js missing!"
 
       - name: Deploy to Azure Web App
         id: deploy-to-webapp
