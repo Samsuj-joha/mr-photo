@@ -1,4 +1,4 @@
-name: Deploy source to Azure - Let Azure Build
+name: Pre-build and Deploy to Azure
 
 on:
   push:
@@ -9,9 +9,10 @@ on:
 env:
   AZURE_WEBAPP_NAME: mr-photography-app
   LOCAL_APP_DIR: mr-photo-app
+  NODE_VERSION: '20.x'
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
     environment:
       name: 'Production'
@@ -21,22 +22,34 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Prepare source code for Azure
+      - name: Set up Node.js version
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install and build
         run: |
           cd ${{ env.LOCAL_APP_DIR }}
+          npm ci
+          npm run build
           
-          # Remove any existing build artifacts
-          rm -rf .next || true
-          rm -rf node_modules || true
+      - name: Install production dependencies
+        run: |
+          cd ${{ env.LOCAL_APP_DIR }}
+          rm -rf node_modules
+          npm ci --production --ignore-scripts
           
-          # Show what we're deploying
-          echo "=== Source files to deploy ==="
-          ls -la
-          
-          echo "=== Package.json scripts ==="
-          cat package.json | grep -A 10 '"scripts"'
+      - name: Verify build output
+        run: |
+          cd ${{ env.LOCAL_APP_DIR }}
+          echo "=== Verifying required files ==="
+          ls -la .next/ && echo "✓ .next directory exists" || echo "✗ .next directory missing"
+          ls -la server.js && echo "✓ server.js exists" || echo "✗ server.js missing"
+          ls -la package.json && echo "✓ package.json exists" || echo "✗ package.json missing"
+          echo "=== .next contents ==="
+          ls -la .next/
 
-      - name: Deploy source to Azure Web App
+      - name: Deploy to Azure Web App
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
         with:
@@ -47,6 +60,5 @@ jobs:
 
       - name: Post-deployment info
         run: |
-          echo "Source code deployed to Azure"
-          echo "Azure will now build the application"
+          echo "Application deployed with pre-built .next directory"
           echo "App URL: https://${{ env.AZURE_WEBAPP_NAME }}-g5a9begrg3a3g9g9.southeastasia-01.azurewebsites.net"
