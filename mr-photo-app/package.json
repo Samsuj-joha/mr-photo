@@ -2,14 +2,12 @@
   "name": "mr-photography",
   "version": "0.1.0",
   "private": true,
-  "_comment": "Custom server approach",
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "build": "prisma generate && next build",
-    "start": "node server.js",
+    "start": "next start",
     "lint": "echo 'Linting skipped'",
-    "postinstall": "prisma generate",
-    "azure:build": "npm ci && npm run build"
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.10.0",

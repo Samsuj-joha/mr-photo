@@ -27,10 +27,14 @@ jobs:
           cache: 'npm'
           cache-dependency-path: './${{ env.LOCAL_APP_DIR }}/package-lock.json'
 
-      - name: Install dependencies and build
+      - name: Install dependencies
         run: |
           cd ${{ env.LOCAL_APP_DIR }}
           npm ci
+
+      - name: Build application
+        run: |
+          cd ${{ env.LOCAL_APP_DIR }}
           npm run build
 
       - name: Upload artifact for deployment job
