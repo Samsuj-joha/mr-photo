@@ -30,11 +30,21 @@ jobs:
           npm ci
           npm run build
           
+      - name: Prepare standalone deployment
+        run: |
+          cd ${{ env.LOCAL_APP_DIR }}
+          # Copy standalone files
+          cp -r .next/standalone ./deploy
+          cp -r .next/static ./deploy/.next/static
+          cp -r public ./deploy/public || true
+          # Copy prisma if exists
+          cp -r prisma ./deploy/ || true
+          
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: ./${{ env.LOCAL_APP_DIR }}
+          path: ./${{ env.LOCAL_APP_DIR }}/deploy
 
   deploy:
     runs-on: ubuntu-latest
