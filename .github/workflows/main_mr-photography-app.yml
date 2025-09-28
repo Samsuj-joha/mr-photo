@@ -1,4 +1,4 @@
-name: Build and deploy Node.js app to Azure Web App - mr-photography-app
+name: Build and deploy Node.js app to Azure Web App - mr-photo-app
 
 on:
   push:
@@ -49,4 +49,4 @@ jobs:
           app-name: 'mr-photography-app'
           slot-name: 'Production'
           package: .
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_A60088C667A340BE8B4F9AC8FFB5DDDC }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_MRPHOTOAPP }}
