@@ -269,7 +269,8 @@
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
+  // Remove standalone for now - it's causing issues
+  // output: 'standalone',
   
   eslint: {
     ignoreDuringBuilds: true,
