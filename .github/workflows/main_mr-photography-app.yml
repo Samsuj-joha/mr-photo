@@ -1,78 +1,3 @@
-# name: Pre-build and Deploy to Azure
-
-# on:
-#   push:
-#     branches:
-#       - main
-#   workflow_dispatch:
-
-# env:
-#   AZURE_WEBAPP_NAME: mr-photography-app
-#   LOCAL_APP_DIR: mr-photo-app
-#   NODE_VERSION: '20.x'
-
-# jobs:
-#   build-and-deploy:
-#     runs-on: ubuntu-latest
-#     environment:
-#       name: 'Production'
-#       url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
-
-#     steps:
-#       - name: Checkout repository
-#         uses: actions/checkout@v4
-
-#       - name: Set up Node.js version
-#         uses: actions/setup-node@v4
-#         with:
-#           node-version: ${{ env.NODE_VERSION }}
-
-#       - name: Install and build
-#         run: |
-#           cd ${{ env.LOCAL_APP_DIR }}
-#           npm ci
-#           npm run build
-          
-#       - name: Install production dependencies
-#         run: |
-#           cd ${{ env.LOCAL_APP_DIR }}
-#           rm -rf node_modules
-#           npm ci --production --ignore-scripts
-          
-#       - name: Verify build output
-#         run: |
-#           cd ${{ env.LOCAL_APP_DIR }}
-#           echo "=== Verifying required files ==="
-#           ls -la .next/ && echo "✓ .next directory exists" || echo "✗ .next directory missing"
-#           ls -la server.js && echo "✓ server.js exists" || echo "✗ server.js missing"
-#           ls -la package.json && echo "✓ package.json exists" || echo "✗ package.json missing"
-#           echo "=== .next contents ==="
-#           ls -la .next/
-
-#       - name: Deploy to Azure Web App
-#         id: deploy-to-webapp
-#         uses: azure/webapps-deploy@v3
-#         with:
-#           app-name: ${{ env.AZURE_WEBAPP_NAME }}
-#           slot-name: 'Production'
-#           package: ./${{ env.LOCAL_APP_DIR }}
-#           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_MRPHOTOAPP }}
-
-#       - name: Post-deployment info
-#         run: |
-#           echo "Application deployed with pre-built .next directory"
-#           echo "App URL: https://${{ env.AZURE_WEBAPP_NAME }}-g5a9begrg3a3g9g9.southeastasia-01.azurewebsites.net"
-
-
-
-
-
-
-
-
-
-
-
 name: Pre-build and Deploy to Azure
 
 on:
@@ -102,19 +27,41 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Install and build
+      - name: Install dependencies
         run: |
           cd ${{ env.LOCAL_APP_DIR }}
           npm ci
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Generate Prisma Client
+        run: |
+          cd ${{ env.LOCAL_APP_DIR }}
           npx prisma generate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Build application
+        run: |
+          cd ${{ env.LOCAL_APP_DIR }}
           npm run build
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           
       - name: Install production dependencies
         run: |
           cd ${{ env.LOCAL_APP_DIR }}
           rm -rf node_modules
           npm ci --production --ignore-scripts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Generate Prisma Client for production
+        run: |
+          cd ${{ env.LOCAL_APP_DIR }}
           npx prisma generate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           
       - name: Verify build output
         run: |
