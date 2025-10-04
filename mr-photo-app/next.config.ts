@@ -267,8 +267,79 @@
 
 
 
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+// /** @type {import('next').NextConfig} */
+// const nextConfig = {
+//   eslint: {
+//     ignoreDuringBuilds: true,
+//   },
+//   typescript: {
+//     ignoreBuildErrors: true,
+//   },
+
+//   images: {
+//     domains: ['res.cloudinary.com', 'images.unsplash.com'],
+//     formats: ['image/webp', 'image/avif'],
+//     remotePatterns: [
+//       {
+//         protocol: 'https',
+//         hostname: 'res.cloudinary.com',
+//       },
+//       {
+//         protocol: 'https',
+//         hostname: 'images.unsplash.com',
+//       },
+//     ],
+//   },
+
+//   experimental: {
+//     serverActions: {
+//       allowedOrigins: ["*"]
+//     },
+//     largePageDataBytes: 128 * 100000,
+//   },
+
+//   serverExternalPackages: ['cloudinary'],
+
+//   env: {
+//     NEXTAUTH_URL: process.env.NEXTAUTH_URL,
+//     NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
+//   },
+
+//   async headers() {
+//     return [
+//       {
+//         source: '/uploads/pdfs/:path*.pdf',
+//         headers: [
+//           {
+//             key: 'Content-Type',
+//             value: 'application/pdf',
+//           },
+//           {
+//             key: 'Content-Disposition',
+//             value: 'inline',
+//           },
+//           {
+//             key: 'Cache-Control',
+//             value: 'public, max-age=31536000',
+//           },
+//           {
+//             key: 'X-Content-Type-Options',
+//             value: 'nosniff',
+//           },
+//         ],
+//       },
+//     ];
+//   },
+// };
+
+// module.exports = nextConfig;
+
+
+
+
+import type { NextConfig } from 'next';
+
+const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -277,7 +348,12 @@ const nextConfig = {
   },
 
   images: {
-    domains: ['res.cloudinary.com', 'images.unsplash.com'],
+    domains: [
+      'res.cloudinary.com',
+      'images.unsplash.com',
+      'mr-photos.com',
+      'www.mr-photos.com'
+    ],
     formats: ['image/webp', 'image/avif'],
     remotePatterns: [
       {
@@ -288,12 +364,16 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'images.unsplash.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'mr-photos.com',
+      },
     ],
   },
 
   experimental: {
     serverActions: {
-      allowedOrigins: ["*"]
+      allowedOrigins: ['*']
     },
     largePageDataBytes: 128 * 100000,
   },
@@ -330,6 +410,22 @@ const nextConfig = {
       },
     ];
   },
+
+  async redirects() {
+    return [
+      {
+        source: '/:path*',
+        has: [
+          {
+            type: 'host',
+            value: 'www.mr-photos.com',
+          },
+        ],
+        destination: 'https://mr-photos.com/:path*',
+        permanent: true,
+      },
+    ];
+  },
 };
 
-module.exports = nextConfig;
+export default nextConfig;
