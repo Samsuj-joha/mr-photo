@@ -1164,6 +1164,8 @@ import {
   Zap,
   AlertCircle,
   CheckCircle,
+  RefreshCw,
+  X,
 } from "lucide-react"
 import Image from "next/image"
 
@@ -1196,6 +1198,9 @@ export default function AdminHomeSlider() {
   const [isCompressing, setIsCompressing] = useState(false)
   const [compressionInfo, setCompressionInfo] = useState("")
   const [uploadProgress, setUploadProgress] = useState("")
+  const [isVerifying, setIsVerifying] = useState(false)
+  const [verificationResults, setVerificationResults] = useState<any[]>([])
+  const [showVerification, setShowVerification] = useState(false)
 
   // Form states
   const [formData, setFormData] = useState({
@@ -1488,6 +1493,70 @@ export default function AdminHomeSlider() {
     setUploadProgress("")
   }
 
+  // Verify which images exist in Cloudinary
+  const verifyImages = async () => {
+    setIsVerifying(true)
+    setShowVerification(true)
+    try {
+      const response = await fetch("/api/admin/home-slider/verify", {
+        cache: 'no-store'
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setVerificationResults(data.results || [])
+      } else {
+        console.error("Failed to verify images")
+      }
+    } catch (error) {
+      console.error("Error verifying images:", error)
+    } finally {
+      setIsVerifying(false)
+    }
+  }
+
+  // Delete broken image entries
+  const deleteBrokenImage = async (id: string) => {
+    await deleteSliderImage(id)
+    await fetchSliderImages()
+    // Remove from verification results
+    setVerificationResults(prev => prev.filter(r => r.id !== id))
+  }
+
+  // Bulk delete all missing images
+  const deleteAllMissing = async () => {
+    const missingIds = verificationResults.filter(r => !r.exists).map(r => r.id)
+    
+    if (missingIds.length === 0) {
+      alert("No missing images to delete")
+      return
+    }
+
+    if (!confirm(`Are you sure you want to delete ${missingIds.length} missing image${missingIds.length !== 1 ? 's' : ''}?`)) {
+      return
+    }
+
+    try {
+      const response = await fetch("/api/admin/home-slider/verify", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: missingIds })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        alert(`✅ Successfully deleted ${data.deleted} missing image${data.deleted !== 1 ? 's' : ''}`)
+        await fetchSliderImages()
+        setVerificationResults(prev => prev.filter(r => r.exists))
+      } else {
+        const error = await response.json()
+        alert(`Failed to delete: ${error.error}`)
+      }
+    } catch (error) {
+      console.error("Error bulk deleting:", error)
+      alert("Failed to delete missing images")
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -1507,9 +1576,34 @@ export default function AdminHomeSlider() {
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             Manage the sliding images on your home page • Auto-compression enabled
           </p>
+          {sliderImages.length > 0 && (
+            <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+              {sliderImages.length} image{sliderImages.length !== 1 ? 's' : ''} in database
+            </p>
+          )}
         </div>
         
-        <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+        <div className="flex gap-2">
+          {sliderImages.length > 0 && (
+            <Button 
+              variant="outline" 
+              onClick={verifyImages}
+              disabled={isVerifying}
+            >
+              {isVerifying ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Verify Images
+                </>
+              )}
+            </Button>
+          )}
+          <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
@@ -1693,6 +1787,101 @@ export default function AdminHomeSlider() {
         </Dialog>
       </div>
 
+      {/* Verification Results */}
+      {showVerification && verificationResults.length > 0 && (
+        <Card className="border-amber-200 dark:border-amber-800">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-amber-600" />
+                Image Verification Results
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowVerification(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {verificationResults.map((result) => (
+                <div
+                  key={result.id}
+                  className={`flex items-center justify-between p-3 rounded-lg ${
+                    result.exists
+                      ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800"
+                      : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    {result.exists ? (
+                      <CheckCircle className="h-5 w-5 text-green-600" />
+                    ) : (
+                      <AlertCircle className="h-5 w-5 text-red-600" />
+                    )}
+                    <div>
+                      <p className="font-medium">{result.title || "Untitled"}</p>
+                      <p className="text-xs text-gray-500 truncate max-w-md">
+                        {result.imageUrl}
+                      </p>
+                      {result.diagnostic && (
+                        <div className="text-xs mt-1 space-y-0.5">
+                          <p className={result.diagnostic.urlAccessible ? "text-green-600" : "text-red-600"}>
+                            Accessible: {result.diagnostic.urlAccessible ? "Yes" : "No"}
+                          </p>
+                          <p className={result.diagnostic.isImageType ? "text-green-600" : "text-red-600"}>
+                            Image Type: {result.diagnostic.isImageType ? "Yes" : "No"}
+                          </p>
+                          {result.contentType && (
+                            <p className="text-gray-400">Content-Type: {result.contentType}</p>
+                          )}
+                          {result.diagnostic.hasCors ? (
+                            <p className="text-green-600">CORS: Enabled</p>
+                          ) : (
+                            <p className="text-amber-600">CORS: Not detected (may cause browser issues)</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {!result.exists && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => deleteBrokenImage(result.id)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      Delete
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 space-y-3">
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <p className="text-sm">
+                  <strong>Summary:</strong> {verificationResults.filter(r => r.exists).length} valid,{" "}
+                  {verificationResults.filter(r => !r.exists).length} missing
+                </p>
+              </div>
+              {verificationResults.filter(r => !r.exists).length > 0 && (
+                <Button
+                  variant="destructive"
+                  onClick={deleteAllMissing}
+                  className="w-full"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete All {verificationResults.filter(r => !r.exists).length} Missing Images
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Slider Images Grid - UNCHANGED */}
       {sliderImages.length === 0 ? (
         <Card className="text-center py-12">
@@ -1720,6 +1909,26 @@ export default function AdminHomeSlider() {
                   alt={image.alt || image.title || "Slider image"}
                   fill
                   className="object-cover"
+                  unoptimized={image.imageUrl.includes('cloudinary.com')}
+                  onError={(e) => {
+                    const target = e.currentTarget as HTMLImageElement
+                    target.style.display = 'none'
+                    // Show error placeholder
+                    const parent = target.parentElement
+                    if (parent) {
+                      parent.innerHTML = `
+                        <div class="w-full h-full flex items-center justify-center bg-red-100 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-700 border-dashed">
+                          <div class="text-center text-red-600 dark:text-red-400 p-4">
+                            <svg class="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                            </svg>
+                            <p class="text-xs font-medium">Image Missing</p>
+                            <p class="text-xs mt-1">Not found in Cloudinary</p>
+                          </div>
+                        </div>
+                      `
+                    }
+                  }}
                 />
                 <div className="absolute top-2 right-2 flex space-x-1">
                   <Badge variant={image.active ? "default" : "secondary"}>

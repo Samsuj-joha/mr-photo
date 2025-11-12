@@ -4,11 +4,8 @@
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import {
   Dialog,
   DialogContent,
@@ -21,8 +18,8 @@ import {
   Upload,
   Plus,
   Trash2,
-  Edit,
   Download,
+  RefreshCw,
   ExternalLink,
   Loader2,
   Image as ImageIcon,
@@ -30,7 +27,7 @@ import {
 } from "lucide-react"
 import Image from "next/image"
 import { toast } from "sonner"
-import { useDropzone } from "react-dropzone"
+import { useDropzone, DropzoneRootProps, DropzoneInputProps } from "react-dropzone"
 
 interface GalleryImage {
   id: string
@@ -82,10 +79,20 @@ export default function GalleryImagesPage({ params }: PageProps) {
     if (!galleryId) return
     
     try {
-      const response = await fetch(`/api/gallery/${galleryId}`)
+      // Add cache busting to ensure fresh data
+      const cacheBuster = `?t=${Date.now()}`
+      const response = await fetch(`/api/gallery/${galleryId}${cacheBuster}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      })
       if (response.ok) {
         const data = await response.json()
         setGallery(data)
+        console.log('Gallery fetched:', data.images.length, 'images')
       } else if (response.status === 404) {
         toast.error('Gallery not found')
         router.push('/admin/gallery')
@@ -170,7 +177,12 @@ export default function GalleryImagesPage({ params }: PageProps) {
       setSelectedFiles([])
       setUploadProgress(0)
       setCurrentUploadFile("")
+      
+      // Force refresh gallery data with cache busting
+      // Wait a moment for database to update, then refresh
+      await new Promise(resolve => setTimeout(resolve, 1500))
       await fetchGallery() // Refresh gallery data
+      
       toast.success(`All ${selectedFiles.length} images uploaded successfully!`)
       
     } catch (error) {
@@ -269,6 +281,14 @@ export default function GalleryImagesPage({ params }: PageProps) {
         </div>
 
         <div className="flex space-x-2">
+          <Button 
+            variant="outline"
+            onClick={() => fetchGallery()}
+            title="Refresh gallery"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
           <Button 
             variant="outline"
             onClick={() => window.open(`/gallery/${gallery.id}`, '_blank')}
@@ -387,12 +407,21 @@ export default function GalleryImagesPage({ params }: PageProps) {
                   alt={image.alt || "Gallery image"}
                   fill
                   className="object-cover group-hover:scale-105 transition-transform duration-200"
-                  unoptimized={image.url.includes('cloudinary.com')}
+                  unoptimized={true}
+                  priority={false}
                   onError={(e) => {
                     console.error('Failed to load image:', image.url)
-                    e.currentTarget.style.display = 'none'
+                    const target = e.currentTarget as HTMLImageElement
+                    target.style.display = 'none'
                   }}
                 />
+                {/* Error placeholder - shown when image fails to load */}
+                <div className="absolute inset-0 bg-gray-200 dark:bg-gray-800 flex items-center justify-center opacity-0 peer-invalid:opacity-100">
+                  <div className="text-center text-gray-500 p-4">
+                    <ImageIcon className="w-8 h-8 mx-auto mb-2" />
+                    <p className="text-xs">Image failed to load</p>
+                  </div>
+                </div>
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-200" />
                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                   <Button
@@ -460,8 +489,8 @@ function UploadImagesForm({
   uploadImages,
   onClose
 }: {
-  getRootProps: any
-  getInputProps: any
+  getRootProps: () => DropzoneRootProps
+  getInputProps: () => DropzoneInputProps
   isDragActive: boolean
   selectedFiles: File[]
   removeSelectedFile: (index: number) => void

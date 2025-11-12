@@ -34,21 +34,25 @@ export function HomeSlider({
   const [isLoading, setIsLoading] = useState(true)
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [startTime, setStartTime] = useState(Date.now())
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set())
+
+  // Filter out images that failed to load - MUST be defined before useEffects that use it
+  const validImages = images.filter(img => !failedImages.has(img.id))
 
   // Auto-play functionality - FIXED
   useEffect(() => {
-    if (!isPlaying || images.length <= 1) return
+    if (!isPlaying || validImages.length <= 1) return
 
     const interval = setInterval(() => {
       if (!isTransitioning) {
         setCurrentIndex((prevIndex) => 
-          prevIndex === images.length - 1 ? 0 : prevIndex + 1
+          prevIndex === validImages.length - 1 ? 0 : prevIndex + 1
         )
       }
     }, autoPlayInterval)
 
     return () => clearInterval(interval)
-  }, [isPlaying, images.length, autoPlayInterval, isTransitioning])
+  }, [isPlaying, validImages.length, autoPlayInterval, isTransitioning])
 
   // Reset start time when current index changes
   useEffect(() => {
@@ -60,6 +64,13 @@ export function HomeSlider({
       setIsLoading(false)
     }
   }, [images])
+  
+  // Adjust current index if current image was filtered out
+  useEffect(() => {
+    if (validImages.length > 0 && currentIndex >= validImages.length) {
+      setCurrentIndex(0)
+    }
+  }, [validImages.length, currentIndex])
 
   const handleSlideChange = (newIndex: number) => {
     if (isTransitioning || newIndex === currentIndex) return
@@ -74,12 +85,12 @@ export function HomeSlider({
   }
 
   const goToPrevious = () => {
-    const newIndex = currentIndex === 0 ? images.length - 1 : currentIndex - 1
+    const newIndex = currentIndex === 0 ? validImages.length - 1 : currentIndex - 1
     handleSlideChange(newIndex)
   }
 
   const goToNext = () => {
-    const newIndex = currentIndex === images.length - 1 ? 0 : currentIndex + 1
+    const newIndex = currentIndex === validImages.length - 1 ? 0 : currentIndex + 1
     handleSlideChange(newIndex)
   }
 
@@ -91,10 +102,14 @@ export function HomeSlider({
     setIsPlaying(!isPlaying)
   }
 
-  if (isLoading || images.length === 0) {
+  if (isLoading || validImages.length === 0) {
     return (
       <div className="relative w-full h-[60vh] bg-gray-200 dark:bg-gray-800 animate-pulse flex items-center justify-center">
-        <div className="text-gray-500 dark:text-gray-400">Loading...</div>
+        <div className="text-gray-500 dark:text-gray-400">
+          {validImages.length === 0 && images.length > 0 
+            ? "No valid slider images available" 
+            : "Loading..."}
+        </div>
       </div>
     )
   }
@@ -110,7 +125,7 @@ export function HomeSlider({
             transform: `translateX(-${currentIndex * 100}%)`
           }}
         >
-          {images.map((image, index) => (
+          {validImages.map((image, index) => (
             <div key={image.id} className="relative w-full flex-shrink-0">
               <Image
                 src={image.imageUrl}
@@ -120,6 +135,39 @@ export function HomeSlider({
                 className="w-full h-auto object-cover transition-all duration-500"
                 priority={index === 0}
                 sizes="100vw"
+                unoptimized={image.imageUrl.includes('cloudinary.com')}
+                    onError={(e) => {
+                      // Log detailed error information
+                      const target = e.currentTarget as HTMLImageElement
+                      console.error('❌ Failed to load slider image:', {
+                        url: image.imageUrl,
+                        id: image.id,
+                        title: image.title,
+                        error: 'Image load failed',
+                        // Try to get more details
+                        naturalWidth: target.naturalWidth,
+                        naturalHeight: target.naturalHeight,
+                        complete: target.complete
+                      })
+                      
+                      // Check if it's a CORS or access issue
+                      fetch(image.imageUrl, { method: 'HEAD', mode: 'no-cors' })
+                        .then(() => {
+                          console.warn('⚠️ Image URL exists but may have CORS/access restrictions')
+                        })
+                        .catch((fetchError) => {
+                          console.error('⚠️ Image URL fetch test failed:', fetchError)
+                        })
+                      
+                      setFailedImages(prev => new Set(prev).add(image.id))
+                      target.style.display = 'none'
+                    }}
+                    onLoad={(e) => {
+                      // Log successful loads for debugging
+                      if (process.env.NODE_ENV === 'development') {
+                        console.log('✅ Slider image loaded successfully:', image.imageUrl)
+                      }
+                    }}
                 style={{
                   maxHeight: '85vh',
                   minHeight: '60vh'
@@ -163,7 +211,7 @@ export function HomeSlider({
       </div>
 
       {/* Navigation Arrows with hover animations */}
-      {images.length > 1 && (
+      {validImages.length > 1 && (
         <>
           <Button
             variant="ghost"
@@ -188,9 +236,9 @@ export function HomeSlider({
       )}
 
       {/* Animated Dots Indicator */}
-      {images.length > 1 && (
+      {validImages.length > 1 && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex space-x-3">
-          {images.map((_, index) => (
+          {validImages.map((_, index) => (
             <button
               key={index}
               className={`h-3 rounded-full transition-all duration-500 hover:scale-125 ${
@@ -205,7 +253,7 @@ export function HomeSlider({
       )}
 
       {/* Auto-play Control with animation */}
-      {images.length > 1 && (
+      {validImages.length > 1 && (
         <Button
           variant="ghost"
           size="icon"
@@ -217,7 +265,7 @@ export function HomeSlider({
       )}
 
       {/* Enhanced Progress Bar - FIXED */}
-      {isPlaying && images.length > 1 && (
+      {isPlaying && validImages.length > 1 && (
         <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
           <div 
             className="h-full bg-gradient-to-r from-white to-blue-200 transition-all duration-100 ease-linear shadow-lg"
@@ -229,10 +277,10 @@ export function HomeSlider({
       )}
 
       {/* Image Counter with animation */}
-      {images.length > 1 && (
+      {validImages.length > 1 && (
         <div className="absolute top-4 left-4 bg-white/20 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm border border-white/20 opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-105 transform">
           <span className="transition-all duration-300">
-            {currentIndex + 1} / {images.length}
+            {currentIndex + 1} / {validImages.length}
           </span>
         </div>
       )}

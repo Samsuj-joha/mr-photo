@@ -316,6 +316,12 @@ export default function FeaturesPage() {
                         fill
                         className="object-cover transition-transform duration-300 group-hover:scale-110"
                         sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                        unoptimized={feature.image.includes('cloudinary.com')}
+                        onError={(e) => {
+                          console.error('Failed to load feature image:', feature.image)
+                          const target = e.currentTarget as HTMLImageElement
+                          target.style.display = 'none'
+                        }}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">

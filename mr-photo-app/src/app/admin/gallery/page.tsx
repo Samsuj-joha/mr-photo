@@ -274,10 +274,12 @@ export default function AdminGallery() {
                   width={400}
                   height={250}
                   className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-200"
-                  unoptimized={gallery.coverImage.includes('cloudinary.com')}
+                  unoptimized={true}
+                  priority={false}
                   onError={(e) => {
                     console.error('Failed to load cover image:', gallery.coverImage)
-                    e.currentTarget.style.display = 'none'
+                    const target = e.currentTarget as HTMLImageElement
+                    target.style.display = 'none'
                   }}
                 />
               ) : (

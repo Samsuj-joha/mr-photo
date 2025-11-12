@@ -291,6 +291,12 @@ export default function BlogPage() {
                               alt={post.title}
                               fill
                               className="object-cover group-hover:scale-110 transition-transform duration-500"
+                              unoptimized={post.coverImage.includes('cloudinary.com')}
+                              onError={(e) => {
+                                console.error('Failed to load blog cover image:', post.coverImage)
+                                const target = e.currentTarget as HTMLImageElement
+                                target.style.display = 'none'
+                              }}
                             />
                           ) : (
                             <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800 flex items-center justify-center">
@@ -370,6 +376,12 @@ export default function BlogPage() {
                               alt={post.title}
                               fill
                               className="object-cover group-hover:scale-105 transition-transform duration-300"
+                              unoptimized={post.coverImage.includes('cloudinary.com')}
+                              onError={(e) => {
+                                console.error('Failed to load blog cover image:', post.coverImage)
+                                const target = e.currentTarget as HTMLImageElement
+                                target.style.display = 'none'
+                              }}
                             />
                           ) : (
                             <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800 flex items-center justify-center">

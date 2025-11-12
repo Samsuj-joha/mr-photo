@@ -871,6 +871,21 @@ export async function POST(request: NextRequest) {
       
       console.log("📤 Cloudinary upload completed successfully")
       
+      // Step 5.5: Verify the image actually exists in Cloudinary
+      try {
+        const verifyResponse = await fetch(uploadResult.secure_url, { method: 'HEAD' })
+        if (!verifyResponse.ok) {
+          console.error(`⚠️ WARNING: Image uploaded but verification failed: ${uploadResult.secure_url}`)
+          console.error(`Status: ${verifyResponse.status}, Cloudinary may not have processed the image yet`)
+          // Continue anyway - sometimes Cloudinary needs a moment to process
+        } else {
+          console.log("✅ Image verified in Cloudinary")
+        }
+      } catch (verifyError) {
+        console.error("⚠️ Could not verify image existence:", verifyError)
+        // Continue anyway - network issues shouldn't block upload
+      }
+      
       // Step 6: Save to database if gallery provided
       if (galleryId) {
         const lastImage = await db.galleryImage.findFirst({
@@ -917,6 +932,8 @@ export async function POST(request: NextRequest) {
 
       } else {
         // Return Cloudinary-only result (for slider images)
+        // Note: The image URL is returned immediately, but Cloudinary may need a moment
+        // to fully process and make it available. The slider component handles missing images gracefully.
         return NextResponse.json({
           success: true,
           url: uploadResult.secure_url,
@@ -928,7 +945,8 @@ export async function POST(request: NextRequest) {
           uploadDetails: {
             ...processingInfo,
             cloudinaryDimensions: `${uploadResult.width}x${uploadResult.height}`,
-            cloudinaryFormat: uploadResult.format
+            cloudinaryFormat: uploadResult.format,
+            note: "Image may take a few seconds to be fully available in Cloudinary"
           },
           message: processingInfo.wasConverted 
             ? "TIFF image converted to JPEG and uploaded successfully"

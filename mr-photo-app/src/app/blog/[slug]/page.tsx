@@ -295,6 +295,12 @@ export default function BlogPostPage() {
                 fill
                 className="object-cover"
                 priority
+                unoptimized={post.coverImage.includes('cloudinary.com')}
+                onError={(e) => {
+                  console.error('Failed to load blog cover image:', post.coverImage)
+                  const target = e.currentTarget as HTMLImageElement
+                  target.style.display = 'none'
+                }}
               />
               {post.featured && (
                 <Badge className="absolute top-6 left-6 bg-yellow-500 text-white">
