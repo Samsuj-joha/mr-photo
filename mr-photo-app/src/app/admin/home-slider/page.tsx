@@ -1155,10 +1155,6 @@ import {
   Plus,
   Trash2,
   Edit,
-  Eye,
-  EyeOff,
-  GripVertical,
-  Upload,
   Loader2,
   Image as ImageIcon,
   Zap,
@@ -1170,7 +1166,7 @@ import {
 import Image from "next/image"
 
 // ✨ CRITICAL: Import compression functions
-import { resizeForCloudinary, formatFileSize, needsCompression } from "@/lib/quickResize"
+import { resizeForCloudinary, formatFileSize } from "@/lib/quickResize"
 
 interface SliderImage {
   id: string
@@ -1187,19 +1183,42 @@ interface SliderImage {
   updatedAt: string
 }
 
+interface VerificationResult {
+  id: string
+  title: string
+  imageUrl: string
+  publicId: string
+  exists: boolean
+  status: number | string
+  contentType?: string
+  isImage?: boolean
+  accessControl?: string
+  cacheControl?: string
+  contentLength?: string
+  active: boolean
+  createdAt: string | Date
+  diagnostic?: {
+    urlAccessible: boolean
+    isImageType: boolean
+    hasCors: boolean
+  }
+  error?: string
+}
+
 export default function AdminHomeSlider() {
   const [sliderImages, setSliderImages] = useState<SliderImage[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isUploading, setIsUploading] = useState(false)
   const [editingImage, setEditingImage] = useState<SliderImage | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   
   // ✨ NEW: Compression states
   const [isCompressing, setIsCompressing] = useState(false)
   const [compressionInfo, setCompressionInfo] = useState("")
   const [uploadProgress, setUploadProgress] = useState("")
   const [isVerifying, setIsVerifying] = useState(false)
-  const [verificationResults, setVerificationResults] = useState<any[]>([])
+  const [verificationResults, setVerificationResults] = useState<VerificationResult[]>([])
   const [showVerification, setShowVerification] = useState(false)
 
   // Form states
@@ -1220,7 +1239,8 @@ export default function AdminHomeSlider() {
 
   const fetchSliderImages = async () => {
     try {
-      const response = await fetch("/api/home-slider")
+      // Use skipValidation=true for admin panel to see all images (including broken ones)
+      const response = await fetch("/api/home-slider?skipValidation=true")
       if (response.ok) {
         const data = await response.json()
         setSliderImages(data)
@@ -1493,6 +1513,95 @@ export default function AdminHomeSlider() {
     setUploadProgress("")
   }
 
+  // Open edit modal with image data
+  const handleEdit = (image: SliderImage) => {
+    setEditingImage(image)
+    setFormData({
+      title: image.title || "",
+      description: image.description || "",
+      alt: image.alt || "",
+      linkUrl: image.linkUrl || "",
+      linkText: image.linkText || "",
+      active: image.active,
+      selectedFile: null,
+      originalFile: null
+    })
+    setIsEditModalOpen(true)
+  }
+
+  // Handle update (edit) submission
+  const handleUpdate = async () => {
+    if (!editingImage) return
+
+    setIsUploading(true)
+    setUploadProgress("💾 Updating slider entry...")
+
+    try {
+      // If a new file is selected, upload it first
+      let imageUrl = editingImage.imageUrl
+      let publicId = editingImage.publicId
+
+      if (formData.selectedFile) {
+        setUploadProgress("☁️ Uploading new image to Cloudinary...")
+        
+        const uploadFormData = new FormData()
+        uploadFormData.append("file", formData.selectedFile)
+
+        const uploadResponse = await fetch("/api/upload", {
+          method: "POST",
+          body: uploadFormData,
+        })
+
+        if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json().catch(() => ({ error: "Upload failed" }))
+          throw new Error(errorData.error || "Failed to upload image")
+        }
+
+        const uploadData = await uploadResponse.json()
+        imageUrl = uploadData.url
+        publicId = uploadData.public_id
+
+        // Note: Old Cloudinary image is not deleted automatically
+        // This is intentional to avoid accidental data loss
+        // Old images can be cleaned up manually from Cloudinary dashboard if needed
+      }
+
+      // Update slider entry
+      const updateData = {
+        title: formData.title,
+        description: formData.description,
+        alt: formData.alt,
+        linkUrl: formData.linkUrl,
+        linkText: formData.linkText,
+        active: formData.active,
+        ...(formData.selectedFile && { imageUrl, publicId })
+      }
+
+      const response = await fetch(`/api/home-slider/${editingImage.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updateData),
+      })
+
+      if (response.ok) {
+        await fetchSliderImages()
+        setIsEditModalOpen(false)
+        resetForm()
+        alert("✅ Slider image updated successfully!")
+      } else {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to update slider")
+      }
+    } catch (error) {
+      console.error("❌ Update error:", error)
+      const errorMessage = error instanceof Error ? error.message : "Unknown update error"
+      alert(`❌ Update failed: ${errorMessage}`)
+      setUploadProgress(`❌ Failed: ${errorMessage}`)
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
   // Verify which images exist in Cloudinary
   const verifyImages = async () => {
     setIsVerifying(true)
@@ -1504,11 +1613,21 @@ export default function AdminHomeSlider() {
       if (response.ok) {
         const data = await response.json()
         setVerificationResults(data.results || [])
+        
+        // Show summary alert
+        const missing = data.results?.filter((r: VerificationResult) => !r.exists) || []
+        if (missing.length > 0) {
+          alert(`⚠️ Found ${missing.length} missing image${missing.length !== 1 ? 's' : ''} (404 errors).\n\nThese images don't exist in Cloudinary at the stored URLs.\n\nPlease delete them and re-upload.`)
+        } else {
+          alert(`✅ All ${data.results?.length || 0} images are valid!`)
+        }
       } else {
         console.error("Failed to verify images")
+        alert("Failed to verify images. Please try again.")
       }
     } catch (error) {
       console.error("Error verifying images:", error)
+      alert("Error verifying images. Please check the console.")
     } finally {
       setIsVerifying(false)
     }
@@ -1522,7 +1641,42 @@ export default function AdminHomeSlider() {
     setVerificationResults(prev => prev.filter(r => r.id !== id))
   }
 
-  // Bulk delete all missing images
+  // Auto-cleanup: Check and delete all missing images automatically
+  const autoCleanupMissing = async () => {
+    if (!confirm("This will automatically check all images and delete any that return 404 (not found). Continue?")) {
+      return
+    }
+
+    setIsVerifying(true)
+    try {
+      const response = await fetch("/api/admin/home-slider/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.deleted > 0) {
+          alert(`✅ Auto-cleanup completed: Deleted ${data.deleted} missing image${data.deleted !== 1 ? 's' : ''}`)
+          await fetchSliderImages()
+          setVerificationResults([])
+          setShowVerification(false)
+        } else {
+          alert("✅ All images are valid. No cleanup needed.")
+        }
+      } else {
+        const error = await response.json()
+        alert(`Failed to cleanup: ${error.error}`)
+      }
+    } catch (error) {
+      console.error("Error auto-cleaning:", error)
+      alert("Failed to auto-cleanup missing images")
+    } finally {
+      setIsVerifying(false)
+    }
+  }
+
+  // Bulk delete all missing images (requires verification first)
   const deleteAllMissing = async () => {
     const missingIds = verificationResults.filter(r => !r.exists).map(r => r.id)
     
@@ -1585,32 +1739,52 @@ export default function AdminHomeSlider() {
         
         <div className="flex gap-2">
           {sliderImages.length > 0 && (
-            <Button 
-              variant="outline" 
-              onClick={verifyImages}
-              disabled={isVerifying}
-            >
-              {isVerifying ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Verifying...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Verify Images
-                </>
-              )}
-            </Button>
+            <>
+              <Button 
+                variant="outline" 
+                onClick={verifyImages}
+                disabled={isVerifying}
+              >
+                {isVerifying ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Verify Images
+                  </>
+                )}
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={autoCleanupMissing}
+                disabled={isVerifying}
+                className="text-orange-600 hover:text-orange-700 border-orange-300 hover:border-orange-400"
+              >
+                {isVerifying ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Cleaning...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Auto-Cleanup 404s
+                  </>
+                )}
+              </Button>
+            </>
           )}
           <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Add New Image
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg">
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Add New Image
+              </Button>
+            </DialogTrigger>
+          <DialogContent className="max-w-lg h-[90vh] flex flex-col">
             <DialogHeader>
               <DialogTitle>Add Slider Image</DialogTitle>
               <DialogDescription>
@@ -1618,7 +1792,7 @@ export default function AdminHomeSlider() {
               </DialogDescription>
             </DialogHeader>
             
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-y-auto flex-1 pr-2">
               <div>
                 <Label htmlFor="title">Title (Optional)</Label>
                 <Input
@@ -1749,8 +1923,8 @@ export default function AdminHomeSlider() {
               </div>
             </div>
             
-            {/* ✨ ENHANCED: Dialog Footer */}
-            <div className="flex justify-end space-x-2 pt-4 border-t">
+            {/* ✨ ENHANCED: Dialog Footer - Fixed at bottom */}
+            <div className="flex justify-end space-x-2 pt-4 border-t mt-auto flex-shrink-0">
               <Button 
                 variant="outline" 
                 onClick={() => {
@@ -1785,6 +1959,192 @@ export default function AdminHomeSlider() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Edit Modal */}
+        <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+          <DialogContent className="max-w-lg h-[90vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle>Edit Slider Image</DialogTitle>
+              <DialogDescription>
+                Update the slider image details. Upload a new image to replace the existing one.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 overflow-y-auto flex-1 pr-2">
+              <div>
+                <Label htmlFor="edit-title">Title (Optional)</Label>
+                <Input
+                  id="edit-title"
+                  value={formData.title}
+                  onChange={(e) => setFormData({...formData, title: e.target.value})}
+                  placeholder="Enter slide title"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="edit-description">Description (Optional)</Label>
+                <Textarea
+                  id="edit-description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  placeholder="Enter slide description"
+                  rows={3}
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="edit-alt">Alt Text</Label>
+                <Input
+                  id="edit-alt"
+                  value={formData.alt}
+                  onChange={(e) => setFormData({...formData, alt: e.target.value})}
+                  placeholder="Describe the image"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="edit-linkUrl">Link URL (Optional)</Label>
+                <Input
+                  id="edit-linkUrl"
+                  value={formData.linkUrl}
+                  onChange={(e) => setFormData({...formData, linkUrl: e.target.value})}
+                  placeholder="https://example.com"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="edit-linkText">Link Text (Optional)</Label>
+                <Input
+                  id="edit-linkText"
+                  value={formData.linkText}
+                  onChange={(e) => setFormData({...formData, linkText: e.target.value})}
+                  placeholder="Learn More"
+                />
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <Switch
+                  checked={formData.active}
+                  onCheckedChange={(checked) => setFormData({...formData, active: checked})}
+                />
+                <Label>Active</Label>
+              </div>
+              
+              {/* Image Upload Section - Optional for edit */}
+              <div>
+                <Label>Replace Image (Optional)</Label>
+                <div className="mt-2 space-y-3">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileSelect}
+                    disabled={isUploading || isCompressing}
+                    className="mb-2"
+                  />
+                  
+                  {/* File Info Display */}
+                  {(formData.selectedFile || formData.originalFile) && (
+                    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 space-y-2">
+                      <div className="flex items-center text-sm">
+                        <ImageIcon className="h-4 w-4 mr-2 text-gray-500" />
+                        <span className="font-medium">
+                          {formData.originalFile?.name || formData.selectedFile?.name}
+                        </span>
+                        {formData.selectedFile && (
+                          <span className="ml-2 text-gray-500">
+                            ({formatFileSize(formData.selectedFile.size)})
+                          </span>
+                        )}
+                      </div>
+                      
+                      {/* Compression Status */}
+                      {compressionInfo && (
+                        <div className="text-xs bg-white dark:bg-gray-900 rounded p-2 border">
+                          <pre className="whitespace-pre-wrap font-mono text-gray-600 dark:text-gray-400">
+                            {compressionInfo}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Compression Status */}
+                  {isCompressing && (
+                    <Alert>
+                      <Zap className="h-4 w-4 animate-pulse" />
+                      <AlertDescription>
+                        <div className="flex items-center">
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          Compressing large image for optimal upload... This may take 5-15 seconds.
+                        </div>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  
+                  {/* Upload Progress */}
+                  {uploadProgress && !isCompressing && (
+                    <Alert>
+                      <CheckCircle className="h-4 w-4" />
+                      <AlertDescription>{uploadProgress}</AlertDescription>
+                    </Alert>
+                  )}
+                  
+                  {/* Current Image Preview */}
+                  {editingImage && !formData.selectedFile && (
+                    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Current Image:</p>
+                      <div className="relative h-32 w-full rounded border">
+                        <Image
+                          src={editingImage.imageUrl}
+                          alt={editingImage.alt || editingImage.title || "Current slider image"}
+                          fill
+                          className="object-cover rounded"
+                          unoptimized={editingImage.imageUrl.includes('cloudinary.com')}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            {/* Dialog Footer */}
+            <div className="flex justify-end space-x-2 pt-4 border-t mt-auto flex-shrink-0">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setIsEditModalOpen(false)
+                  resetForm()
+                }}
+                disabled={isUploading || isCompressing}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleUpdate}
+                disabled={isUploading || isCompressing}
+              >
+                {isCompressing ? (
+                  <>
+                    <Zap className="h-4 w-4 mr-2 animate-pulse" />
+                    Compressing...
+                  </>
+                ) : isUploading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <Edit className="h-4 w-4 mr-2" />
+                    Update Slide
+                  </>
+                )}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+        </div>
       </div>
 
       {/* Verification Results */}
@@ -1848,14 +2208,27 @@ export default function AdminHomeSlider() {
                     </div>
                   </div>
                   {!result.exists && (
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => deleteBrokenImage(result.id)}
-                    >
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      Delete
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          // Copy URL to clipboard for manual checking
+                          navigator.clipboard.writeText(result.imageUrl)
+                          alert(`URL copied to clipboard:\n${result.imageUrl}\n\nYou can check this URL in Cloudinary dashboard.`)
+                        }}
+                      >
+                        Copy URL
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => deleteBrokenImage(result.id)}
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Delete
+                      </Button>
+                    </div>
                   )}
                 </div>
               ))}
@@ -1900,7 +2273,8 @@ export default function AdminHomeSlider() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="overflow-y-auto max-h-[calc(100vh-300px)] pr-2">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 pb-4">
           {sliderImages.map((image, index) => (
             <Card key={image.id} className="overflow-hidden">
               <div className="relative h-48">
@@ -1960,7 +2334,11 @@ export default function AdminHomeSlider() {
                   </div>
                   
                   <div className="flex space-x-1">
-                    <Button variant="ghost" size="sm">
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => handleEdit(image)}
+                    >
                       <Edit className="h-4 w-4" />
                     </Button>
                     
@@ -1993,6 +2371,7 @@ export default function AdminHomeSlider() {
               </CardContent>
             </Card>
           ))}
+          </div>
         </div>
       )}
     </div>

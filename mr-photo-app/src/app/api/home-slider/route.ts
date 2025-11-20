@@ -9,6 +9,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const activeOnly = searchParams.get("active") === "true"
+    const skipValidation = searchParams.get("skipValidation") === "true" // For admin panel
 
     const where = activeOnly ? { active: true } : {}
 
@@ -17,6 +18,9 @@ export async function GET(request: NextRequest) {
       orderBy: { order: "asc" }
     })
 
+    // Return all images - let the frontend handle image loading errors gracefully
+    // The HomeSlider component has built-in error handling for failed images
+    // This ensures all images are available, even if server-side validation has issues
     return NextResponse.json(sliderImages)
   } catch (error) {
     console.error("Error fetching slider images:", error)

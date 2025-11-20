@@ -125,49 +125,155 @@ export function HomeSlider({
             transform: `translateX(-${currentIndex * 100}%)`
           }}
         >
-          {validImages.map((image, index) => (
+          {validImages.map((image, index) => {
+            // Validate and sanitize image URL
+            let imageSrc = image.imageUrl || ''
+            
+            // Ensure URL is valid
+            if (imageSrc && !imageSrc.startsWith('http://') && !imageSrc.startsWith('https://')) {
+              console.warn('⚠️ Invalid image URL format:', imageSrc)
+              imageSrc = '' // Will trigger error handler
+            }
+            
+            return (
             <div key={image.id} className="relative w-full flex-shrink-0">
               <Image
-                src={image.imageUrl}
+                src={imageSrc || '/placeholder-image.jpg'} // Fallback to placeholder if invalid
                 alt={image.alt || image.title || "Slider image"}
                 width={1920}
                 height={1080}
                 className="w-full h-auto object-cover transition-all duration-500"
                 priority={index === 0}
                 sizes="100vw"
-                unoptimized={image.imageUrl.includes('cloudinary.com')}
-                    onError={(e) => {
-                      // Log detailed error information
-                      const target = e.currentTarget as HTMLImageElement
-                      console.error('❌ Failed to load slider image:', {
-                        url: image.imageUrl,
-                        id: image.id,
-                        title: image.title,
-                        error: 'Image load failed',
-                        // Try to get more details
-                        naturalWidth: target.naturalWidth,
-                        naturalHeight: target.naturalHeight,
-                        complete: target.complete
-                      })
-                      
-                      // Check if it's a CORS or access issue
-                      fetch(image.imageUrl, { method: 'HEAD', mode: 'no-cors' })
-                        .then(() => {
-                          console.warn('⚠️ Image URL exists but may have CORS/access restrictions')
-                        })
-                        .catch((fetchError) => {
-                          console.error('⚠️ Image URL fetch test failed:', fetchError)
-                        })
-                      
-                      setFailedImages(prev => new Set(prev).add(image.id))
+                unoptimized={true}
+                onError={(e) => {
+                  try {
+                    // Log detailed error information
+                    const target = e.currentTarget as HTMLImageElement
+                    const errorInfo: Record<string, any> = {
+                      url: image.imageUrl || 'No URL',
+                      id: image.id || 'No ID',
+                      title: image.title || 'No title',
+                    }
+                    
+                    // Safely access target properties
+                    try {
+                      errorInfo.naturalWidth = target?.naturalWidth ?? 0
+                      errorInfo.naturalHeight = target?.naturalHeight ?? 0
+                      errorInfo.complete = target?.complete ?? false
+                      errorInfo.src = target?.src ?? 'No src'
+                      errorInfo.currentSrc = target?.currentSrc ?? 'No currentSrc'
+                      errorInfo.error = target?.error ? 'Image element has error property' : 'No error property'
+                    } catch (targetError) {
+                      errorInfo.targetError = targetError instanceof Error ? targetError.message : 'Unknown target error'
+                    }
+                    
+                    // Add event information
+                    try {
+                      errorInfo.eventType = e.type
+                      errorInfo.timeStamp = e.timeStamp
+                    } catch (eventError) {
+                      errorInfo.eventError = eventError instanceof Error ? eventError.message : 'Unknown event error'
+                    }
+                    
+                    // Only log full details if it's not a 404 (we'll handle 404s separately)
+                    // For 404s, we'll log a cleaner message after the fetch test
+                    const isLikely404 = errorInfo.naturalWidth === 0 && errorInfo.naturalHeight === 0 && errorInfo.complete === true
+                    
+                    if (!isLikely404) {
+                      console.error('❌ Failed to load slider image:', JSON.stringify(errorInfo, null, 2))
+                    }
+                    
+                    // Mark image as failed and hide it
+                    setFailedImages(prev => new Set(prev).add(image.id))
+                    if (target) {
                       target.style.display = 'none'
-                    }}
-                    onLoad={(e) => {
-                      // Log successful loads for debugging
-                      if (process.env.NODE_ENV === 'development') {
-                        console.log('✅ Slider image loaded successfully:', image.imageUrl)
+                    }
+                    
+                    // Test the URL directly to see what the actual issue is (works in both dev and production)
+                    const testImageLoad = async () => {
+                      try {
+                        if (!image.imageUrl) {
+                          console.error('❌ Image URL is empty or undefined')
+                          return
+                        }
+                        
+                        // Validate URL format
+                        let testUrl: URL
+                        try {
+                          testUrl = new URL(image.imageUrl)
+                        } catch (urlError) {
+                          console.error('❌ Invalid URL format:', image.imageUrl, urlError)
+                          return
+                        }
+                        
+                        // Try fetching the image to see the actual error
+                        const response = await fetch(image.imageUrl, { 
+                          method: 'GET',
+                          mode: 'cors',
+                          cache: 'no-cache',
+                          headers: {
+                            'Accept': 'image/*',
+                          }
+                        })
+                        
+                        const fetchInfo = {
+                          status: response.status,
+                          statusText: response.statusText,
+                          ok: response.ok,
+                          contentType: response.headers.get('content-type'),
+                          cors: response.headers.get('access-control-allow-origin'),
+                          url: image.imageUrl
+                        }
+                        
+                        if (response.status === 404) {
+                          // Image doesn't exist in Cloudinary - this is a data integrity issue
+                          console.warn(`⚠️ Image not found (404) in Cloudinary: ${image.imageUrl}`)
+                          console.warn(`   Image ID: ${image.id} - This image should be removed from the database.`)
+                          console.warn(`   Use the admin panel's verification tool to clean up missing images.`)
+                        } else {
+                          console.log('🔍 Image fetch test result:', JSON.stringify(fetchInfo, null, 2))
+                          
+                          if (!response.ok) {
+                            console.error(`❌ HTTP Error: ${response.status} ${response.statusText}`)
+                            const errorText = await response.text().catch(() => 'Could not read error response')
+                            if (errorText) {
+                              console.error('❌ Error response body:', errorText.substring(0, 200))
+                            }
+                          }
+                        }
+                      } catch (fetchError) {
+                        console.error('❌ Fetch test failed:', {
+                          error: fetchError instanceof Error ? fetchError.message : 'Unknown error',
+                          stack: fetchError instanceof Error ? fetchError.stack : undefined,
+                          url: image.imageUrl
+                        })
                       }
-                    }}
+                    }
+                    
+                    // Run the test
+                    testImageLoad()
+                  } catch (outerError) {
+                    // Fallback error handling if everything else fails
+                    console.error('❌ Critical error in image error handler:', {
+                      error: outerError instanceof Error ? outerError.message : 'Unknown error',
+                      stack: outerError instanceof Error ? outerError.stack : undefined,
+                      imageId: image?.id,
+                      imageUrl: image?.imageUrl
+                    })
+                    
+                    // Still try to mark as failed
+                    if (image?.id) {
+                      setFailedImages(prev => new Set(prev).add(image.id))
+                    }
+                  }
+                }}
+                onLoad={(e) => {
+                  // Log successful loads for debugging
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log('✅ Slider image loaded successfully:', image.imageUrl)
+                  }
+                }}
                 style={{
                   maxHeight: '85vh',
                   minHeight: '60vh'
@@ -206,7 +312,8 @@ export function HomeSlider({
                 </div>
               )}
             </div>
-          ))}
+          )
+          })}
         </div>
       </div>
 

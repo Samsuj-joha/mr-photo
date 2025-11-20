@@ -348,25 +348,36 @@ const nextConfig: NextConfig = {
   },
 
   images: {
-    domains: [
-      'res.cloudinary.com',
-      'images.unsplash.com',
-      'mr-photos.com',
-      'www.mr-photos.com'
-    ],
+    // Disable image optimization for Azure App Service compatibility
+    // Azure App Service may have issues with Next.js image optimization API
+    unoptimized: true,
     formats: ['image/webp', 'image/avif'],
     remotePatterns: [
       {
         protocol: 'https',
         hostname: 'res.cloudinary.com',
+        pathname: '/**',
       },
       {
         protocol: 'https',
         hostname: 'images.unsplash.com',
+        pathname: '/**',
       },
       {
         protocol: 'https',
         hostname: 'mr-photos.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'www.mr-photos.com',
+        pathname: '/**',
+      },
+      // Allow any Azure blob storage or CDN URLs
+      {
+        protocol: 'https',
+        hostname: '**.blob.core.windows.net',
+        pathname: '/**',
       },
     ],
   },

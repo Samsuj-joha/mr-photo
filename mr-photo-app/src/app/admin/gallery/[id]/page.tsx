@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -50,12 +50,11 @@ interface Gallery {
   imageCount: number
 }
 
-interface PageProps {
-  params: Promise<{ id: string }>
-}
-
-export default function GalleryImagesPage({ params }: PageProps) {
+export default function GalleryImagesPage() {
   const router = useRouter()
+  const params = useParams()
+  const galleryId = params?.id as string
+  
   const [gallery, setGallery] = useState<Gallery | null>(null)
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -63,16 +62,6 @@ export default function GalleryImagesPage({ params }: PageProps) {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
   const [currentUploadFile, setCurrentUploadFile] = useState<string>("")
-  const [galleryId, setGalleryId] = useState<string>("")
-
-  // Get gallery ID from params
-  useEffect(() => {
-    const getParams = async () => {
-      const resolvedParams = await params
-      setGalleryId(resolvedParams.id)
-    }
-    getParams()
-  }, [params])
 
   // Fetch gallery details
   const fetchGallery = useCallback(async () => {
@@ -251,7 +240,7 @@ export default function GalleryImagesPage({ params }: PageProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
@@ -299,9 +288,9 @@ export default function GalleryImagesPage({ params }: PageProps) {
           
           <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button className="bg-blue-600 hover:bg-blue-700">
                 <Plus className="h-4 w-4 mr-2" />
-                Upload Images
+                Add Images
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[600px]">
@@ -396,9 +385,10 @@ export default function GalleryImagesPage({ params }: PageProps) {
         </Card>
       )}
 
-      {/* Images Grid */}
+      {/* Images Grid with Scroll */}
       {gallery.images.length > 0 ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        <div className="overflow-y-auto max-h-[calc(100vh-400px)] pr-2">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 pb-4">
           {gallery.images.map((image) => (
             <Card key={image.id} className="group overflow-hidden">
               <div className="relative aspect-square">
@@ -456,6 +446,18 @@ export default function GalleryImagesPage({ params }: PageProps) {
               )}
             </Card>
           ))}
+          </div>
+          {/* Add Image Button at Bottom */}
+          <div className="sticky bottom-4 mt-4 flex justify-center">
+            <Button 
+              onClick={() => setIsUploadModalOpen(true)}
+              size="lg"
+              className="shadow-lg"
+            >
+              <Plus className="h-5 w-5 mr-2" />
+              Add More Images
+            </Button>
+          </div>
         </div>
       ) : (
         <Card>

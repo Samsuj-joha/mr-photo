@@ -108,6 +108,91 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// POST - Auto-cleanup missing images (deletes all 404 images automatically)
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    
+    if (!session || session.user.role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      )
+    }
+
+    // Get all slider images
+    const sliderImages = await db.homeSlider.findMany()
+
+    // Check which images are missing
+    const missingImages = await Promise.all(
+      sliderImages.map(async (slider) => {
+        try {
+          const response = await fetch(slider.imageUrl, { 
+            method: 'HEAD',
+            cache: 'no-cache'
+          })
+          return {
+            id: slider.id,
+            exists: response.ok,
+            status: response.status
+          }
+        } catch (error) {
+          return {
+            id: slider.id,
+            exists: false,
+            status: 'error'
+          }
+        }
+      })
+    )
+
+    // Get IDs of missing images
+    const missingIds = missingImages
+      .filter(img => !img.exists)
+      .map(img => img.id)
+
+    if (missingIds.length === 0) {
+      return NextResponse.json({
+        message: "No missing images found. All images exist in Cloudinary.",
+        deleted: 0,
+        failed: 0
+      })
+    }
+
+    // Delete all missing images from database
+    const deleteResults = await Promise.all(
+      missingIds.map(async (id: string) => {
+        try {
+          await db.homeSlider.delete({
+            where: { id }
+          })
+          return { id, success: true }
+        } catch (error) {
+          console.error(`Error deleting slider ${id}:`, error)
+          return { id, success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+        }
+      })
+    )
+
+    const successCount = deleteResults.filter(r => r.success).length
+    const failCount = deleteResults.filter(r => !r.success).length
+
+    return NextResponse.json({
+      message: `Auto-cleanup completed: Deleted ${successCount} missing image${successCount !== 1 ? 's' : ''}`,
+      deleted: successCount,
+      failed: failCount,
+      deletedIds: deleteResults.filter(r => r.success).map(r => r.id),
+      results: deleteResults
+    })
+  } catch (error) {
+    console.error("Error auto-cleaning slider images:", error)
+    return NextResponse.json(
+      { error: "Failed to auto-cleanup slider images" },
+      { status: 500 }
+    )
+  }
+}
+
 // DELETE - Bulk delete missing images
 export async function DELETE(request: NextRequest) {
   try {
