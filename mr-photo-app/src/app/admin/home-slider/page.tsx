@@ -1415,7 +1415,7 @@ export default function AdminHomeSlider() {
           linkText: formData.linkText,
           active: formData.active,
           imageUrl: uploadData.url,
-          publicId: uploadData.public_id,
+          publicId: uploadData.publicId,
           order: sliderImages.length
         }
 
@@ -1559,7 +1559,7 @@ export default function AdminHomeSlider() {
 
         const uploadData = await uploadResponse.json()
         imageUrl = uploadData.url
-        publicId = uploadData.public_id
+        publicId = uploadData.publicId
 
         // Note: Old Cloudinary image is not deleted automatically
         // This is intentional to avoid accidental data loss

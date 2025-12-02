@@ -5,6 +5,7 @@
 import { usePathname } from 'next/navigation'
 import { Header } from './Header'
 import { Footer } from './Footer'
+import { CONTAINER_CLASS } from '@/lib/container'
 
 interface ConditionalLayoutProps {
   children: React.ReactNode
@@ -27,9 +28,9 @@ export function ConditionalLayout({ children }: ConditionalLayoutProps) {
       {/* Header */}
       <Header />
       
-      {/* Main Content with WIDER container spacing for more horizontal space */}
+      {/* Main Content with consistent container spacing */}
       <main className="flex-1">
-        <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
+        <div className={CONTAINER_CLASS}>
           {children}
         </div>
       </main>

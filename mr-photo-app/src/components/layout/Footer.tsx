@@ -259,6 +259,7 @@ import {
   Eye
 } from "lucide-react"
 import { useState, useEffect } from "react"
+import { CONTAINER_CLASS } from "@/lib/container"
 
 // Gallery Image interface
 interface GalleryImage {
@@ -315,15 +316,20 @@ export function Footer() {
   const fetchRecentPhotos = async () => {
     try {
       setLoadingPhotos(true)
-      const response = await fetch('/api/gallery/images?limit=6&sort=recent')
+      const response = await fetch('/api/gallery/images?limit=6&offset=0')
       if (response.ok) {
         const data = await response.json()
-        setRecentPhotos(data.images || data || [])
+        // Handle both response formats: { images: [...] } or [...]
+        const photos = data.images || data || []
+        setRecentPhotos(Array.isArray(photos) ? photos : [])
       } else {
-        console.error('Failed to fetch recent photos')
+        const errorData = await response.json().catch(() => ({}))
+        console.error('Failed to fetch recent photos:', response.status, errorData)
+        setRecentPhotos([]) // Set empty array on error
       }
     } catch (error) {
       console.error('Error fetching recent photos:', error)
+      setRecentPhotos([]) // Set empty array on error
     } finally {
       setLoadingPhotos(false)
     }
@@ -354,7 +360,7 @@ export function Footer() {
 
   return (
     <footer className="bg-background border-t border-border">
-      <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
+      <div className={CONTAINER_CLASS}>
         
         {/* Main Footer Content */}
         <div className="py-16">
@@ -434,7 +440,7 @@ export function Footer() {
                     <div key={i} className="aspect-square bg-muted rounded-lg animate-pulse" />
                   ))}
                 </div>
-              ) : (
+              ) : recentPhotos.length > 0 ? (
                 <div className="grid grid-cols-3 gap-2">
                   {recentPhotos.slice(0, 6).map((photo) => (
                     <Link 
@@ -466,6 +472,14 @@ export function Footer() {
                         </div>
                       </div>
                     </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {[...Array(6)].map((_, i) => (
+                    <div key={i} className="aspect-square bg-muted rounded-lg border border-border flex items-center justify-center">
+                      <Camera className="h-6 w-6 text-muted-foreground/50" />
+                    </div>
                   ))}
                 </div>
               )}

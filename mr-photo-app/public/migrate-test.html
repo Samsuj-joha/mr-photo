@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Migration Test</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        button {
+            background: #0070f3;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #0051cc;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Database Migration Tool</h1>
+        <p class="subtitle">Add year and category columns to GalleryImage table</p>
+        
+        <button id="runMigration" onclick="runMigration()">Run Migration</button>
+        <button onclick="location.reload()">Clear Results</button>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        async function runMigration() {
+            const resultDiv = document.getElementById('result');
+            const button = document.getElementById('runMigration');
+            
+            button.disabled = true;
+            resultDiv.className = 'result info';
+            resultDiv.textContent = '⏳ Running migration...\nPlease wait...';
+            
+            try {
+                const response = await fetch('/api/admin/migrate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = 
+                        '✅ Migration completed successfully!\n\n' +
+                        'Results:\n' +
+                        data.results.map((r, i) => `  ${i + 1}. ${r}`).join('\n') +
+                        '\n\n🎉 You can now upload images with year and category fields!' +
+                        '\n\n💡 Next step: Restart your Next.js dev server' +
+                        '\n   1. Stop the dev server (Ctrl+C in terminal)' +
+                        '\n   2. Run: npm run dev';
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = 
+                        '❌ Migration failed!\n\n' +
+                        'Error: ' + data.message + '\n\n' +
+                        'Details:\n' + (data.details || 'No details available');
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = 
+                    '❌ Connection error!\n\n' +
+                    'Error: ' + error.message + '\n\n' +
+                    '💡 Make sure your Next.js dev server is running';
+            } finally {
+                button.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
+

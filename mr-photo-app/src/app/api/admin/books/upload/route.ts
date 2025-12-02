@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { uploadImage, deleteImage } from "@/lib/cloudinary"
+import { deleteImage } from "@/lib/cloudinary"
+import { processImageForUpload } from "@/lib/imageProcessor"
 import { writeFile, mkdir } from 'fs/promises'
 import path from 'path'
 
@@ -45,9 +46,38 @@ export async function POST(request: NextRequest) {
     console.log(`🔄 Uploading ${type}: ${file.name}`)
 
     if (type === 'cover') {
-      // Upload cover images to Cloudinary
+      // Process image to ensure 10MB or less
+      console.log(`🔄 Processing cover image: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`)
+      const processed = await processImageForUpload(file)
+      console.log(`✅ Image processed: ${(processed.buffer.length / 1024 / 1024).toFixed(2)}MB`)
+
+      // Configure Cloudinary
+      const { v2: cloudinary } = await import('cloudinary')
+      cloudinary.config({
+        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+        api_key: process.env.CLOUDINARY_API_KEY,
+        api_secret: process.env.CLOUDINARY_API_SECRET,
+      })
+
+      // Upload processed image to Cloudinary
       const folder = 'mr-photography/books/covers'
-      const uploadResult = await uploadImage(file, folder)
+      const uploadResult = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          {
+            folder,
+            resource_type: 'auto',
+            transformation: [
+              { quality: 'auto:best' },
+              { fetch_format: 'auto' }
+            ],
+            public_id: processed.fileName.replace(/\.[^/.]+$/, ''),
+          },
+          (error, result) => {
+            if (error) reject(error)
+            else resolve(result)
+          }
+        ).end(processed.buffer)
+      }) as any
 
       console.log(`✅ Cover image uploaded to Cloudinary:`, uploadResult.secure_url)
 

@@ -2,6 +2,8 @@
 import { HomeSlider } from "@/components/home/HomeSlider"
 import { db } from "@/lib/db"
 
+export const revalidate = 0
+
 async function getSliderImages() {
   try {
     const images = await db.homeSlider.findMany({

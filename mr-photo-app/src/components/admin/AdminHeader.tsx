@@ -37,7 +37,7 @@ export function AdminHeader() {
   const [searchQuery, setSearchQuery] = useState("")
 
   return (
-    <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
+    <div className="sticky top-0 z-40 flex h-20 shrink-0 items-center gap-x-4 border-b border-gray-200/60 dark:border-gray-800/60 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl px-6 shadow-md sm:gap-x-6 lg:px-10">
       
       {/* Mobile menu button */}
       <Button variant="ghost" className="lg:hidden" size="sm">
@@ -47,12 +47,12 @@ export function AdminHeader() {
 
       {/* Search Bar */}
       <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
-        <div className="relative flex flex-1 items-center max-w-md">
-          <Search className="pointer-events-none absolute left-3 h-5 w-5 text-gray-400" />
+        <div className="relative flex flex-1 items-center max-w-xl">
+          <Search className="pointer-events-none absolute left-4 h-5 w-5 text-gray-400" />
           <Input
             type="search"
             placeholder="Search galleries, portfolios, blog posts..."
-            className="w-full pl-10 pr-4 bg-gray-50 dark:bg-gray-800 border-0 focus:bg-white dark:focus:bg-gray-700 transition-colors"
+            className="w-full pl-12 pr-4 h-11 bg-gray-50/80 dark:bg-gray-800/80 border-0 focus:bg-white dark:focus:bg-gray-700 focus:ring-2 focus:ring-blue-500/20 rounded-xl transition-all shadow-sm"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -67,8 +67,8 @@ export function AdminHeader() {
           <DropdownMenuTrigger asChild>
             <Button 
               variant="outline" 
-              size="sm"
-              className="hidden sm:flex bg-blue-600 text-white border-blue-600 hover:bg-blue-700 hover:border-blue-700"
+              size="default"
+              className="hidden sm:flex bg-gradient-to-r from-blue-600 to-blue-700 text-white border-0 hover:from-blue-700 hover:to-blue-800 shadow-md hover:shadow-lg transition-all duration-300"
             >
               <Plus className="h-4 w-4 mr-2" />
               Quick Add
@@ -91,23 +91,23 @@ export function AdminHeader() {
         </DropdownMenu>
 
         {/* View Site Button */}
-        <Button variant="ghost" size="sm" className="hidden sm:flex">
+        <Button variant="ghost" size="default" className="hidden sm:flex hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
           <Eye className="h-4 w-4 mr-2" />
           View Site
         </Button>
 
         {/* Activity Indicator */}
-        <div className="hidden md:flex items-center space-x-1 px-3 py-1 rounded-full bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-300">
-          <Activity className="h-3 w-3" />
-          <span className="text-xs font-medium">Live</span>
+        <div className="hidden md:flex items-center space-x-1.5 px-3.5 py-2 rounded-full bg-gradient-to-r from-green-100 to-emerald-100 dark:from-green-900 dark:to-emerald-900 text-green-800 dark:text-green-300 shadow-sm">
+          <Activity className="h-3.5 w-3.5 animate-pulse" />
+          <span className="text-xs font-semibold">Live</span>
         </div>
 
         {/* Theme Toggle */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm">
-              <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-              <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            <Button variant="ghost" size="default" className="hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+              <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+              <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
               <span className="sr-only">Toggle theme</span>
             </Button>
           </DropdownMenuTrigger>
@@ -130,9 +130,9 @@ export function AdminHeader() {
         {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="relative">
+            <Button variant="ghost" size="default" className="relative hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
               <Bell className="h-5 w-5" />
-              <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-xs bg-red-500 text-white">
+              <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-xs bg-gradient-to-r from-red-500 to-red-600 text-white shadow-md animate-pulse">
                 3
               </Badge>
               <span className="sr-only">View notifications</span>
@@ -180,10 +180,10 @@ export function AdminHeader() {
         {/* User Profile Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative h-9 w-9 rounded-full">
-              <Avatar className="h-9 w-9">
+            <Button variant="ghost" className="relative h-11 w-11 rounded-full hover:ring-2 hover:ring-blue-500/20 transition-all">
+              <Avatar className="h-11 w-11 ring-2 ring-white dark:ring-gray-800 shadow-md">
                 <AvatarImage src={session?.user?.image || ""} alt="Admin" />
-                <AvatarFallback className="bg-blue-600 text-white">
+                <AvatarFallback className="bg-gradient-to-br from-blue-600 to-blue-700 text-white font-semibold">
                   {session?.user?.name?.charAt(0) || "A"}
                 </AvatarFallback>
               </Avatar>

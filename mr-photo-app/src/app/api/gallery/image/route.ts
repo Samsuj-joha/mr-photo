@@ -26,11 +26,21 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all images from filtered galleries
+    // Explicitly select fields to avoid year column issues
     const images = await db.galleryImage.findMany({
       where: {
         gallery: galleryWhere
       },
-      include: {
+      select: {
+        id: true,
+        url: true,
+        publicId: true,
+        alt: true,
+        caption: true,
+        order: true,
+        loves: true,
+        galleryId: true,
+        createdAt: true,
         gallery: {
           select: {
             id: true,

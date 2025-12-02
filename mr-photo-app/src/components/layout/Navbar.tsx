@@ -472,6 +472,7 @@ import {
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
+import { CONTAINER_CLASS } from "@/lib/container"
 
 // Navigation items
 const mainNavItems = [
@@ -518,7 +519,7 @@ export function Navbar() {
           : "bg-transparent"
       )}
     >
-      <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16 2xl:px-20">
+      <div className={CONTAINER_CLASS}>
         <div className="flex h-16 lg:h-20 items-center justify-between">
           
           {/* Logo */}

@@ -1,21 +1,11 @@
 // src/app/admin/gallery/page.tsx - UPDATED with Simple Form Modal
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogTrigger 
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Plus,
@@ -29,13 +19,11 @@ import {
   Image as ImageIcon,
   Star,
   Camera,
-  Loader2,
-  X
+  Loader2
 } from "lucide-react"
 import Image from "next/image"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
-import { useDropzone } from "react-dropzone"
 
 interface Gallery {
   id: string
@@ -55,10 +43,10 @@ export default function AdminGallery() {
   const router = useRouter()
   const [galleries, setGalleries] = useState<Gallery[]>([])
   const [loading, setLoading] = useState(true)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
   // Fetch galleries from API
   const fetchGalleries = async () => {
@@ -84,23 +72,69 @@ export default function AdminGallery() {
 
   // Delete gallery
   const deleteGallery = async (id: string, title: string) => {
-    if (!confirm(`Are you sure you want to delete "${title}"? This will also delete all images in this gallery.`)) return
+    if (!confirm(`Are you sure you want to delete "${title}"? This will also delete all images in this gallery. This action cannot be undone.`)) return
 
+    setDeletingId(id)
+    
     try {
       const response = await fetch(`/api/gallery/${id}`, {
         method: 'DELETE',
       })
 
+      let responseData: any = {}
+      try {
+        const text = await response.text()
+        responseData = text ? JSON.parse(text) : {}
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError)
+        responseData = { error: 'Failed to parse server response' }
+      }
+
       if (response.ok) {
-        toast.success('Gallery deleted successfully')
-        fetchGalleries()
+        const deletedCount = responseData.deletedImages || 0
+        const cloudinaryDeleted = responseData.deletedFromCloudinary || 0
+        
+        if (cloudinaryDeleted < deletedCount && responseData.cloudinaryErrors > 0) {
+          toast.warning(`Gallery deleted, but ${responseData.cloudinaryErrors} image(s) failed to delete from Cloudinary`)
+        } else {
+          toast.success(`Gallery "${title}" deleted successfully${deletedCount > 0 ? ` (${deletedCount} image${deletedCount > 1 ? 's' : ''} removed)` : ''}`)
+        }
+        
+        // Refresh the gallery list
+        await fetchGalleries()
       } else {
-        const error = await response.json()
-        toast.error(error.error || 'Failed to delete gallery')
+        console.error('Delete failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          responseData
+        })
+        
+        // Log full error details for debugging
+        console.error('Full error response:', JSON.stringify(responseData, null, 2))
+        
+        // Extract error message with fallbacks
+        let errorMsg = responseData.error || responseData.message || `Failed to delete gallery (${response.status})`
+        
+        // Add Prisma error code if available
+        if (responseData.prismaCode) {
+          errorMsg += ` [Prisma Error: ${responseData.prismaCode}]`
+        }
+        
+        // Add details in development
+        if (responseData.details && process.env.NODE_ENV === 'development') {
+          console.error('Error details:', responseData.details)
+          if (responseData.details.message) {
+            errorMsg += ` - ${responseData.details.message}`
+          }
+        }
+        
+        toast.error(errorMsg)
       }
     } catch (error) {
       console.error('Error deleting gallery:', error)
-      toast.error('Failed to delete gallery')
+      toast.error('Failed to delete gallery: ' + (error instanceof Error ? error.message : 'Unknown error'))
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -147,26 +181,13 @@ export default function AdminGallery() {
           </p>
         </div>
         
-        <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-          <DialogTrigger asChild>
-            <Button className="mt-4 sm:mt-0 bg-blue-600 hover:bg-blue-700 text-white">
-              <Plus className="h-4 w-4 mr-2" />
-              Create Gallery
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Create New Gallery</DialogTitle>
-              <DialogDescription>
-                Fill in the details and upload images for your new gallery
-              </DialogDescription>
-            </DialogHeader>
-            <CreateGalleryForm 
-              onClose={() => setIsCreateModalOpen(false)} 
-              onSuccess={fetchGalleries}
-            />
-          </DialogContent>
-        </Dialog>
+        <Button 
+          className="mt-4 sm:mt-0 bg-blue-600 hover:bg-blue-700 text-white"
+          onClick={() => router.push('/admin/gallery/upload')}
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Upload Photos
+        </Button>
       </div>
 
       {/* Stats Cards */}
@@ -354,8 +375,13 @@ export default function AdminGallery() {
                   size="sm" 
                   className="text-red-600 hover:text-red-700"
                   onClick={() => deleteGallery(gallery.id, gallery.title)}
+                  disabled={deletingId === gallery.id}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  {deletingId === gallery.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
                 </Button>
               </div>
             </CardContent>
@@ -375,328 +401,12 @@ export default function AdminGallery() {
               : "Get started by creating your first gallery"
             }
           </p>
-          <Button onClick={() => setIsCreateModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+          <Button onClick={() => router.push('/admin/gallery/upload')} className="bg-blue-600 hover:bg-blue-700">
             <Plus className="h-4 w-4 mr-2" />
-            Create Gallery
+            Upload Photos
           </Button>
         </div>
       )}
     </div>
-  )
-}
-
-// Simple Create Gallery Form Component
-function CreateGalleryForm({ 
-  onClose, 
-  onSuccess 
-}: { 
-  onClose: () => void
-  onSuccess: () => void 
-}) {
-  const [formData, setFormData] = useState({
-    title: "",
-    country: "",
-    category: "",
-    description: "",
-  })
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
-  const [uploading, setUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(0)
-
-  // Dropzone for image upload
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    const validFiles = acceptedFiles.filter(file => {
-      if (!file.type.startsWith('image/')) {
-        toast.error(`${file.name} is not an image file`)
-        return false
-      }
-      return true
-    })
-
-    setSelectedFiles(prev => [...prev, ...validFiles])
-    
-    validFiles.forEach(file => {
-      const sizeMB = (file.size / (1024 * 1024)).toFixed(2)
-      toast.success(`${file.name} selected (${sizeMB} MB)`)
-    })
-  }, [])
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      'image/*': ['.jpeg', '.jpg', '.png', '.gif', '.webp', '.bmp', '.tiff']
-    },
-    multiple: true
-  })
-
-  // Remove selected file
-  const removeFile = (index: number) => {
-    setSelectedFiles(prev => prev.filter((_, i) => i !== index))
-  }
-
-  // Format file size
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes'
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    // Validation
-    if (!formData.title.trim()) {
-      toast.error('Title is required')
-      return
-    }
-    if (!formData.country.trim()) {
-      toast.error('Country is required')
-      return
-    }
-    if (!formData.category.trim()) {
-      toast.error('Category is required')
-      return
-    }
-    if (selectedFiles.length === 0) {
-      toast.error('Please select at least one image')
-      return
-    }
-
-    setIsSubmitting(true)
-    setUploading(true)
-    
-    try {
-      // Step 1: Create gallery
-      const galleryResponse = await fetch('/api/gallery', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title: formData.title.trim(),
-          description: formData.description.trim(),
-          category: formData.category.trim().toLowerCase(),
-          country: formData.country.trim().toLowerCase(),
-          featured: false,
-          published: true,
-        }),
-      })
-
-      if (!galleryResponse.ok) {
-        const error = await galleryResponse.json()
-        throw new Error(error.error || 'Failed to create gallery')
-      }
-
-      const gallery = await galleryResponse.json()
-
-      // Step 2: Upload images to the gallery
-      let uploadSuccessCount = 0
-      for (let i = 0; i < selectedFiles.length; i++) {
-        const file = selectedFiles[i]
-        setUploadProgress(((i + 1) / selectedFiles.length) * 100)
-
-        const uploadFormData = new FormData()
-        uploadFormData.append('file', file)
-        uploadFormData.append('galleryId', gallery.id)
-        uploadFormData.append('title', file.name.split('.')[0].replace(/[_-]/g, ' '))
-        uploadFormData.append('alt', file.name.split('.')[0].replace(/[_-]/g, ' '))
-
-        const uploadResponse = await fetch('/api/upload', {
-          method: 'POST',
-          body: uploadFormData,
-        })
-
-        if (uploadResponse.ok) {
-          uploadSuccessCount++
-          toast.success(`${file.name} uploaded successfully`)
-        } else {
-          const error = await uploadResponse.json()
-          console.error(`Failed to upload ${file.name}:`, error)
-          toast.error(`Failed to upload ${file.name}`)
-        }
-      }
-
-      if (uploadSuccessCount > 0) {
-        toast.success(`🎉 Gallery created! ${uploadSuccessCount}/${selectedFiles.length} images uploaded successfully`)
-        
-        // Reset form
-        setFormData({ title: "", country: "", category: "", description: "" })
-        setSelectedFiles([])
-        setUploadProgress(0)
-        
-        // Refresh galleries and close modal
-        onSuccess()
-        onClose()
-      } else {
-        toast.error('Gallery created but no images were uploaded')
-      }
-      
-    } catch (error) {
-      console.error('Error creating gallery:', error)
-      toast.error(error instanceof Error ? error.message : 'Failed to create gallery')
-    } finally {
-      setIsSubmitting(false)
-      setUploading(false)
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-6 overflow-y-auto">
-      {/* Upload Progress */}
-      {uploading && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-          <div className="flex items-center space-x-3 mb-2">
-            <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-            <span className="font-medium text-blue-900 dark:text-blue-100">
-              Creating gallery and uploading images... ({Math.round(uploadProgress)}%)
-            </span>
-          </div>
-          <div className="w-full bg-blue-200 rounded-full h-2">
-            <div 
-              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${uploadProgress}%` }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Title */}
-      <div>
-        <Label htmlFor="title">Gallery Title *</Label>
-        <Input
-          id="title"
-          value={formData.title}
-          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-          placeholder="Enter gallery title"
-          required
-          disabled={isSubmitting}
-        />
-      </div>
-
-      {/* Country and Category in one row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="country">Country Name *</Label>
-          <Input
-            id="country"
-            value={formData.country}
-            onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-            placeholder="e.g. Bangladesh, India, USA"
-            required
-            disabled={isSubmitting}
-          />
-        </div>
-        <div>
-          <Label htmlFor="category">Category *</Label>
-          <Input
-            id="category"
-            value={formData.category}
-            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-            placeholder="e.g. wedding, nature, portrait"
-            required
-            disabled={isSubmitting}
-          />
-        </div>
-      </div>
-      
-      {/* Description */}
-      <div>
-        <Label htmlFor="description">Description (Optional)</Label>
-        <Textarea
-          id="description"
-          value={formData.description}
-          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-          placeholder="Enter gallery description"
-          rows={3}
-          disabled={isSubmitting}
-        />
-      </div>
-
-      {/* Image Upload */}
-      <div>
-        <Label>Upload Images *</Label>
-        <div
-          {...getRootProps()}
-          className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors mt-2 ${
-            isDragActive
-              ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-              : "border-gray-300 hover:border-gray-400"
-          } ${isSubmitting ? 'pointer-events-none opacity-50' : ''}`}
-        >
-          <input {...getInputProps()} disabled={isSubmitting} />
-          <Upload className="mx-auto h-10 w-10 text-gray-400 mb-3" />
-          <div className="space-y-1">
-            <p className="text-sm font-medium">
-              {isDragActive
-                ? "Drop the images here..."
-                : "Drag & drop images here, or click to select"}
-            </p>
-            <p className="text-xs text-gray-500">
-              Any size images • JPG, PNG, GIF, WebP supported
-            </p>
-          </div>
-        </div>
-
-        {/* Selected Files Preview */}
-        {selectedFiles.length > 0 && (
-          <div className="mt-4 space-y-2">
-            <p className="text-sm font-medium">Selected Images ({selectedFiles.length})</p>
-            <div className="max-h-40 overflow-y-auto space-y-2">
-              {selectedFiles.map((file, index) => (
-                <div key={index} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded">
-                  <div className="flex items-center space-x-2">
-                    <ImageIcon className="h-5 w-5 text-blue-500" />
-                    <div>
-                      <p className="text-sm font-medium">{file.name}</p>
-                      <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
-                    </div>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeFile(index)}
-                    className="h-6 w-6 p-0"
-                    disabled={isSubmitting}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-      
-      {/* Submit Buttons */}
-      <div className="flex gap-4 pt-4">
-        <Button 
-          type="button" 
-          variant="outline" 
-          onClick={onClose} 
-          className="flex-1"
-          disabled={isSubmitting}
-        >
-          Cancel
-        </Button>
-        <Button 
-          type="submit" 
-          className="flex-1 bg-blue-600 hover:bg-blue-700"
-          disabled={isSubmitting || !formData.title || !formData.country || !formData.category || selectedFiles.length === 0}
-        >
-          {isSubmitting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Creating...
-            </>
-          ) : (
-            `Create Gallery & Upload ${selectedFiles.length} Images`
-          )}
-        </Button>
-      </div>
-    </form>
   )
 }

@@ -6,6 +6,7 @@ import { useRouter, useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   Dialog,
   DialogContent,
@@ -23,7 +24,9 @@ import {
   ExternalLink,
   Loader2,
   Image as ImageIcon,
-  X
+  X,
+  AlertCircle,
+  CheckCircle
 } from "lucide-react"
 import Image from "next/image"
 import { toast } from "sonner"
@@ -36,6 +39,8 @@ interface GalleryImage {
   alt?: string
   caption?: string
   order: number
+  year?: number
+  category?: string
   createdAt: string
 }
 
@@ -50,6 +55,30 @@ interface Gallery {
   imageCount: number
 }
 
+interface VerificationResult {
+  id: string
+  title: string
+  imageUrl: string
+  publicId: string
+  galleryId: string
+  galleryTitle: string
+  exists: boolean
+  status: number | string
+  contentType?: string
+  isImage?: boolean
+  accessControl?: string
+  cacheControl?: string
+  contentLength?: string
+  createdAt: string | Date
+  diagnostic?: {
+    urlAccessible: boolean
+    isImageType: boolean
+    hasCors: boolean
+    hasContent?: boolean
+  }
+  error?: string
+}
+
 export default function GalleryImagesPage() {
   const router = useRouter()
   const params = useParams()
@@ -62,14 +91,17 @@ export default function GalleryImagesPage() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
   const [currentUploadFile, setCurrentUploadFile] = useState<string>("")
+  const [isVerifying, setIsVerifying] = useState(false)
+  const [verificationResults, setVerificationResults] = useState<VerificationResult[]>([])
+  const [showVerification, setShowVerification] = useState(false)
 
   // Fetch gallery details
   const fetchGallery = useCallback(async () => {
     if (!galleryId) return
     
     try {
-      // Add cache busting to ensure fresh data
-      const cacheBuster = `?t=${Date.now()}`
+      // Add cache busting and skip published check for admin panel
+      const cacheBuster = `?t=${Date.now()}&skipPublishedCheck=true`
       const response = await fetch(`/api/gallery/${galleryId}${cacheBuster}`, {
         cache: 'no-store',
         headers: {
@@ -187,20 +219,134 @@ export default function GalleryImagesPage() {
     if (!confirm(`Are you sure you want to delete "${imageName}"?`)) return
 
     try {
+      console.log(`🗑️ Attempting to delete image: ${imageId}`)
       const response = await fetch(`/api/gallery/image/${imageId}`, {
         method: 'DELETE',
       })
 
+      const responseData = await response.json().catch(() => ({ error: 'Failed to parse response' }))
+
       if (response.ok) {
+        console.log('✅ Delete successful:', responseData)
         toast.success('Image deleted successfully')
         await fetchGallery()
       } else {
-        const error = await response.json()
-        toast.error(error.error || 'Failed to delete image')
+        console.error('❌ Delete failed:', response.status, responseData)
+        toast.error(responseData.error || `Failed to delete image (${response.status})`)
       }
     } catch (error) {
       console.error('Error deleting image:', error)
-      toast.error('Failed to delete image')
+      toast.error('Failed to delete image: ' + (error instanceof Error ? error.message : 'Unknown error'))
+    }
+  }
+
+  // Verify images in this gallery against Cloudinary
+  const verifyImages = async () => {
+    if (!galleryId) return
+    setIsVerifying(true)
+    setShowVerification(true)
+    try {
+      const response = await fetch(`/api/admin/gallery/verify?galleryId=${galleryId}`, {
+        cache: 'no-store'
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setVerificationResults(data.results || [])
+
+        const missing = (data.results || []).filter((r: VerificationResult) => !r.exists)
+        if (missing.length > 0) {
+          alert(`⚠️ Found ${missing.length} missing image${missing.length !== 1 ? 's' : ''} (404 errors) in this gallery.\n\nThese images don't exist in Cloudinary at the stored URLs.\n\nYou can delete them below or use Auto-Cleanup.`)
+        } else {
+          alert(`✅ All ${data.results?.length || 0} images in this gallery are valid!`)
+        }
+      } else {
+        console.error("Failed to verify gallery images")
+        alert("Failed to verify images. Please try again.")
+      }
+    } catch (error) {
+      console.error("Error verifying gallery images:", error)
+      alert("Error verifying images. Please check the console.")
+    } finally {
+      setIsVerifying(false)
+    }
+  }
+
+  // Auto-clean missing images in this gallery
+  const autoCleanupMissing = async () => {
+    if (!galleryId) return
+    if (!confirm("This will automatically check all images in this gallery and delete any that return 404 (not found). Continue?")) {
+      return
+    }
+
+    setIsVerifying(true)
+    try {
+      const response = await fetch("/api/admin/gallery/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ galleryId })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.deleted > 0) {
+          alert(`✅ Auto-cleanup completed: Deleted ${data.deleted} missing image${data.deleted !== 1 ? 's' : ''} from this gallery`)
+          await fetchGallery()
+          setVerificationResults([])
+          setShowVerification(false)
+        } else {
+          alert("✅ All images in this gallery are valid. No cleanup needed.")
+        }
+      } else {
+        const error = await response.json().catch(() => ({ error: "Unknown error" }))
+        alert(`Failed to cleanup: ${error.error}`)
+      }
+    } catch (error) {
+      console.error("Error auto-cleaning gallery images:", error)
+      alert("Failed to auto-clean missing images")
+    } finally {
+      setIsVerifying(false)
+    }
+  }
+
+  // Delete one broken image from verification list
+  const deleteBrokenImage = async (id: string) => {
+    await deleteImage(id, "image")
+    await fetchGallery()
+    setVerificationResults(prev => prev.filter(r => r.id !== id))
+  }
+
+  // Bulk delete all missing images from this gallery (requires verification first)
+  const deleteAllMissing = async () => {
+    const missingIds = verificationResults.filter(r => !r.exists).map(r => r.id)
+
+    if (missingIds.length === 0) {
+      alert("No missing images to delete")
+      return
+    }
+
+    if (!confirm(`Are you sure you want to delete ${missingIds.length} missing image${missingIds.length !== 1 ? 's' : ''} from this gallery?`)) {
+      return
+    }
+
+    try {
+      const response = await fetch("/api/admin/gallery/verify", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: missingIds })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        alert(`✅ Successfully deleted ${data.deleted} missing image${data.deleted !== 1 ? 's' : ''}`)
+        await fetchGallery()
+        setVerificationResults(prev => prev.filter(r => r.exists))
+      } else {
+        const error = await response.json().catch(() => ({ error: "Unknown error" }))
+        alert(`Failed to delete: ${error.error}`)
+      }
+    } catch (error) {
+      console.error("Error bulk deleting gallery images:", error)
+      alert("Failed to delete missing images")
     }
   }
 
@@ -266,10 +412,52 @@ export default function GalleryImagesPage() {
                 {gallery.category}
               </span>
             </div>
+            <p className="text-xs text-purple-600 dark:text-purple-400 mt-2">
+              ℹ️ Images are auto-categorized by year when uploaded
+            </p>
           </div>
         </div>
 
         <div className="flex space-x-2">
+          {gallery.images.length > 0 && (
+            <>
+              <Button
+                variant="outline"
+                onClick={verifyImages}
+                disabled={isVerifying}
+              >
+                {isVerifying ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Verify Images
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={autoCleanupMissing}
+                disabled={isVerifying}
+                className="text-orange-600 hover:text-orange-700 border-orange-300 hover:border-orange-400"
+              >
+                {isVerifying ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Cleaning...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Auto-Cleanup 404s
+                  </>
+                )}
+              </Button>
+            </>
+          )}
           <Button 
             variant="outline"
             onClick={() => fetchGallery()}
@@ -385,6 +573,119 @@ export default function GalleryImagesPage() {
         </Card>
       )}
 
+      {/* Verification Results */}
+      {showVerification && verificationResults.length > 0 && (
+        <Card className="border-amber-200 dark:border-amber-800">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-amber-600" />
+                Gallery Image Verification
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowVerification(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {verificationResults.map((result) => (
+                <div
+                  key={result.id}
+                  className={`flex items-center justify-between p-3 rounded-lg ${
+                    result.exists
+                      ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800"
+                      : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    {result.exists ? (
+                      <CheckCircle className="h-5 w-5 text-green-600" />
+                    ) : (
+                      <AlertCircle className="h-5 w-5 text-red-600" />
+                    )}
+                    <div>
+                      <p className="font-medium text-sm">
+                        {result.title || "Untitled"}{" "}
+                        <span className="text-xs text-gray-500">
+                          ({result.galleryTitle})
+                        </span>
+                      </p>
+                      <p className="text-xs text-gray-500 truncate max-w-md">
+                        {result.imageUrl}
+                      </p>
+                      {result.diagnostic && (
+                        <div className="text-xs mt-1 space-y-0.5">
+                          <p className={result.diagnostic.urlAccessible ? "text-green-600" : "text-red-600"}>
+                            Accessible: {result.diagnostic.urlAccessible ? "Yes" : "No"}
+                          </p>
+                          <p className={result.diagnostic.isImageType ? "text-green-600" : "text-red-600"}>
+                            Image Type: {result.diagnostic.isImageType ? "Yes" : "No"}
+                          </p>
+                          {result.contentType && (
+                            <p className="text-gray-400">Content-Type: {result.contentType}</p>
+                          )}
+                          {result.diagnostic.hasCors ? (
+                            <p className="text-green-600">CORS: Enabled</p>
+                          ) : (
+                            <p className="text-amber-600">CORS: Not detected (may cause browser issues)</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {!result.exists && (
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          navigator.clipboard.writeText(result.imageUrl)
+                          alert(`URL copied to clipboard:\n${result.imageUrl}`)
+                        }}
+                      >
+                        Copy URL
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => deleteBrokenImage(result.id)}
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Delete
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 space-y-3">
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <p className="text-sm">
+                  <strong>Summary:</strong>{" "}
+                  {verificationResults.filter(r => r.exists).length} valid,{" "}
+                  {verificationResults.filter(r => !r.exists).length} missing
+                </p>
+              </div>
+              {verificationResults.filter(r => !r.exists).length > 0 && (
+                <Button
+                  variant="destructive"
+                  onClick={deleteAllMissing}
+                  className="w-full"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete All {verificationResults.filter(r => !r.exists).length} Missing Images
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Images Grid with Scroll */}
       {gallery.images.length > 0 ? (
         <div className="overflow-y-auto max-h-[calc(100vh-400px)] pr-2">
@@ -413,12 +714,21 @@ export default function GalleryImagesPage() {
                   </div>
                 </div>
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-200" />
+                {/* Year Badge - Always visible */}
+                {image.year && (
+                  <div className="absolute top-2 left-2 bg-purple-600 text-white px-2 py-1 rounded text-xs font-semibold">
+                    📅 {image.year}
+                  </div>
+                )}
                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                   <Button
                     variant="destructive"
                     size="sm"
                     className="h-8 w-8 p-0"
-                    onClick={() => deleteImage(image.id, image.alt || 'image')}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      deleteImage(image.id, image.alt || 'image')
+                    }}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -438,10 +748,17 @@ export default function GalleryImagesPage() {
                 </div>
               </div>
               {image.caption && (
-                <CardContent className="p-2">
+                <CardContent className="p-2 space-y-1">
                   <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
                     {image.caption}
                   </p>
+                  {image.category && (
+                    <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400">
+                      <span className="uppercase tracking-wide">
+                        Category: <span className="font-semibold">{image.category}</span>
+                      </span>
+                    </div>
+                  )}
                 </CardContent>
               )}
             </Card>

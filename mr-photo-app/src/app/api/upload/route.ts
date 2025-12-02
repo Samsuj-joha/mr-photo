@@ -653,7 +653,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { convertImageToJPEG, optimizeImage } from "@/lib/imageConverter"
+import { processImageForUpload } from "@/lib/imageProcessor"
 
 export async function POST(request: NextRequest) {
   console.log("🚀 Upload API called with TIFF support")
@@ -683,10 +683,11 @@ export async function POST(request: NextRequest) {
     // Step 3: Parse form data
     const formData = await request.formData()
     const file = formData.get("file") as File
-    const galleryId = formData.get("galleryId") as string
+    const galleryId = formData.get("galleryId") as string | null
     const alt = formData.get("alt") as string || ""
     const caption = formData.get("caption") as string || ""
     const title = formData.get("title") as string || ""
+    const year = formData.get("year") as string | null
     
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 })
@@ -698,97 +699,18 @@ export async function POST(request: NextRequest) {
 
     console.log(`📁 Original file: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB, ${file.type})`)
 
-    // ✨ NEW: Step 3.5 - SMART IMAGE PROCESSING
+    // Step 3.5: Process image to ensure 10MB or less (same as home slider and other uploads)
     let processedBuffer: Buffer
     let processedFileName: string
     let processingInfo: any = {}
     
     try {
-      // Check if file needs conversion or is too large
-      const isTiff = file.type === 'image/tiff' || file.type === 'image/tif' || file.name.toLowerCase().endsWith('.tif') || file.name.toLowerCase().endsWith('.tiff')
-      const isLarge = file.size > 10 * 1024 * 1024 // Over 10MB
+      const processed = await processImageForUpload(file)
+      processedBuffer = processed.buffer
+      processedFileName = processed.fileName
+      processingInfo = processed.processingInfo
       
-      if (isTiff) {
-        console.log(`🔄 TIFF file detected, converting to JPEG...`)
-        const conversionResult = await convertImageToJPEG(file)
-        
-        // Check if converted file is still too large
-        if (conversionResult.convertedSize > 10 * 1024 * 1024) {
-          console.log(`⚠️ Converted file still large (${(conversionResult.convertedSize / 1024 / 1024).toFixed(2)}MB), optimizing...`)
-          
-          // Create a temporary file from the converted buffer
-          const tempFile = new File([conversionResult.buffer], file.name.replace(/\.tiff?$/i, '.jpg'), { type: 'image/jpeg' })
-          const optimizationResult = await optimizeImage(tempFile, {
-            maxWidth: 3840,
-            maxHeight: 2160,
-            quality: 80
-          })
-          
-          processedBuffer = optimizationResult.buffer
-          processedFileName = file.name.replace(/\.tiff?$/i, '.jpg')
-          processingInfo = {
-            originalFormat: 'TIFF',
-            finalFormat: 'JPEG',
-            originalSize: file.size,
-            convertedSize: conversionResult.convertedSize,
-            finalSize: optimizationResult.convertedSize,
-            wasConverted: true,
-            wasOptimized: true,
-            dimensions: `${optimizationResult.width}×${optimizationResult.height}`
-          }
-        } else {
-          processedBuffer = conversionResult.buffer
-          processedFileName = file.name.replace(/\.tiff?$/i, '.jpg')
-          processingInfo = {
-            originalFormat: 'TIFF',
-            finalFormat: 'JPEG',
-            originalSize: file.size,
-            finalSize: conversionResult.convertedSize,
-            wasConverted: true,
-            wasOptimized: false,
-            dimensions: `${conversionResult.width}×${conversionResult.height}`
-          }
-        }
-        
-        console.log(`✅ TIFF processing complete: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${(processedBuffer.length / 1024 / 1024).toFixed(2)}MB`)
-        
-      } else if (isLarge) {
-        console.log(`📦 Large file detected (${(file.size / 1024 / 1024).toFixed(2)}MB), optimizing...`)
-        const optimizationResult = await optimizeImage(file, {
-          maxWidth: 3840,
-          maxHeight: 2160,
-          quality: 80
-        })
-        
-        processedBuffer = optimizationResult.buffer
-        processedFileName = file.name.replace(/\.[^/.]+$/, '.jpg')
-        processingInfo = {
-          originalFormat: file.type,
-          finalFormat: 'JPEG',
-          originalSize: file.size,
-          finalSize: optimizationResult.convertedSize,
-          wasConverted: false,
-          wasOptimized: true,
-          dimensions: `${optimizationResult.width}×${optimizationResult.height}`
-        }
-        
-        console.log(`✅ Optimization complete: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${(processedBuffer.length / 1024 / 1024).toFixed(2)}MB`)
-        
-      } else {
-        // Small supported file - use as-is
-        console.log(`✅ File size acceptable, processing as-is`)
-        const arrayBuffer = await file.arrayBuffer()
-        processedBuffer = Buffer.from(arrayBuffer)
-        processedFileName = file.name
-        processingInfo = {
-          originalFormat: file.type,
-          finalFormat: file.type,
-          originalSize: file.size,
-          finalSize: file.size,
-          wasConverted: false,
-          wasOptimized: false
-        }
-      }
+      console.log(`✅ Image processed: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${(processedBuffer.length / 1024 / 1024).toFixed(2)}MB`)
       
     } catch (conversionError) {
       console.error('❌ Image processing failed:', conversionError)
@@ -803,7 +725,7 @@ export async function POST(request: NextRequest) {
       }, { status: 422 })
     }
     
-    // Final size check
+    // Final size check (should already be 10MB or less, but double-check)
     if (processedBuffer.length > 10 * 1024 * 1024) {
       console.log(`❌ Processed file still too large: ${(processedBuffer.length / 1024 / 1024).toFixed(2)}MB`)
       return NextResponse.json({
@@ -886,28 +808,110 @@ export async function POST(request: NextRequest) {
         // Continue anyway - network issues shouldn't block upload
       }
       
-      // Step 6: Save to database if gallery provided
+      // Step 6: Auto-categorize image using AI (with multiple categories support)
+      let detectedCategory = "Others"
+      try {
+        console.log("🤖 Detecting category for image...")
+        
+        // Get the base URL for API calls
+        const baseUrl = process.env.NEXTAUTH_URL || 
+                       process.env.NEXT_PUBLIC_APP_URL || 
+                       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+        
+        const categoryResponse = await fetch(`${baseUrl}/api/ai/detect-category`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            imageUrl: uploadResult.secure_url,
+            fileName: file.name
+          })
+        })
+
+        if (categoryResponse.ok) {
+          const categoryData = await categoryResponse.json()
+          // Support multiple categories - use categories array if available, otherwise combine with alternatives
+          if (categoryData.categories && categoryData.categories.length > 0) {
+            // Use the categories array directly (already top 3)
+            detectedCategory = categoryData.categories.join(", ")
+          } else if (categoryData.alternatives && categoryData.alternatives.length > 0) {
+            // Fallback: combine main category with alternatives (top 3)
+            const allCategories = [
+              categoryData.category,
+              ...categoryData.alternatives.slice(0, 2)
+            ].filter((cat, idx, arr) => arr.indexOf(cat) === idx) // Remove duplicates
+            detectedCategory = allCategories.join(", ")
+          } else {
+            detectedCategory = categoryData.category || "Others"
+          }
+          const method = categoryData.method || "unknown"
+          console.log(`✅ Category detected: ${detectedCategory} (method: ${method}, confidence: ${categoryData.confidence || 'N/A'})`)
+          
+          // Warn if using fallback method (but only once to reduce log noise)
+          if (method.includes("filename") || method.includes("fallback")) {
+            if (categoryData.errorType === "quota_exceeded") {
+              // Quota warning already logged in detect-category route, skip here
+            } else {
+              console.log("⚠️ Using filename-based detection (AI not available)")
+            }
+          }
+        } else {
+          const errorText = await categoryResponse.text()
+          console.log(`⚠️ Category detection failed (${categoryResponse.status}): ${errorText}, using default: Others`)
+        }
+      } catch (categoryError) {
+        console.error("⚠️ Category detection error:", categoryError)
+        // Continue with default category
+      }
+
+      // Step 7: Save to database ONLY if galleryId is provided
+      // For home slider and other non-gallery uploads, just return Cloudinary result
       if (galleryId) {
+        console.log("💾 Saving image to gallery database...")
+        
+        // Step 8: Save to database
         const lastImage = await db.galleryImage.findFirst({
           where: { galleryId },
-          orderBy: { order: 'desc' }
+          orderBy: { order: 'desc' },
+          select: { order: true }
         })
 
         const nextOrder = lastImage ? lastImage.order + 1 : 0
         const imageAlt = title || alt || processedFileName.split('.')[0]
         const imageCaption = caption || title || ""
+        
+        // Use provided year or default to current year
+        const uploadYear = year ? parseInt(year) : new Date().getFullYear()
 
-        const galleryImage = await db.galleryImage.create({
-          data: {
-            url: uploadResult.secure_url,
-            publicId: uploadResult.public_id,
-            alt: imageAlt,
-            caption: imageCaption,
-            order: nextOrder,
-            loves: 0,
-            galleryId,
-          }
-        })
+        // Create gallery image with year and category fields
+        let galleryImage
+        
+        // Try to create with year and category fields
+        const dataToCreate: any = {
+          url: uploadResult.secure_url,
+          publicId: uploadResult.public_id,
+          alt: imageAlt,
+          caption: imageCaption,
+          order: nextOrder,
+          loves: 0,
+          galleryId: galleryId,
+          year: uploadYear,
+          category: detectedCategory,
+        }
+        
+        try {
+          galleryImage = await db.galleryImage.create({ data: dataToCreate })
+          console.log("✅ Image saved to gallery database")
+        } catch (error: any) {
+          // If creation fails, return the error
+          console.error("❌ Failed to create image in database:", error)
+          return NextResponse.json({
+            error: "Database error",
+            message: `Failed to save image to database: ${error instanceof Error ? error.message : String(error)}`,
+            details: error instanceof Error ? error.message : String(error)
+          }, { status: 500 })
+        }
 
         return NextResponse.json({
           success: true,
@@ -919,25 +923,26 @@ export async function POST(request: NextRequest) {
           order: galleryImage.order,
           loves: galleryImage.loves,
           galleryId: galleryImage.galleryId,
+          category: (galleryImage as any).category || detectedCategory,
+          year: (galleryImage as any).year || uploadYear,
           createdAt: galleryImage.createdAt,
           uploadDetails: {
             ...processingInfo,
             cloudinaryDimensions: `${uploadResult.width}x${uploadResult.height}`,
-            cloudinaryFormat: uploadResult.format
+            cloudinaryFormat: uploadResult.format,
+            detectedCategory
           },
           message: processingInfo.wasConverted 
             ? "TIFF image converted to JPEG and uploaded successfully"
-            : "Image uploaded successfully"
+            : "Image uploaded and categorized successfully"
         }, { status: 201 })
-
       } else {
-        // Return Cloudinary-only result (for slider images)
-        // Note: The image URL is returned immediately, but Cloudinary may need a moment
-        // to fully process and make it available. The slider component handles missing images gracefully.
+        // No galleryId provided - return Cloudinary-only result (for home slider, etc.)
+        console.log("📤 Returning Cloudinary-only result (no gallery entry created)")
         return NextResponse.json({
           success: true,
           url: uploadResult.secure_url,
-          public_id: uploadResult.public_id,
+          publicId: uploadResult.public_id,
           width: uploadResult.width,
           height: uploadResult.height,
           bytes: uploadResult.bytes,
@@ -946,27 +951,33 @@ export async function POST(request: NextRequest) {
             ...processingInfo,
             cloudinaryDimensions: `${uploadResult.width}x${uploadResult.height}`,
             cloudinaryFormat: uploadResult.format,
-            note: "Image may take a few seconds to be fully available in Cloudinary"
+            detectedCategory
           },
           message: processingInfo.wasConverted 
             ? "TIFF image converted to JPEG and uploaded successfully"
-            : "Image uploaded successfully"
+            : "Image uploaded to Cloudinary successfully"
         })
       }
       
     } catch (cloudinaryError) {
-      console.log("❌ Cloudinary upload failed:", cloudinaryError)
+      console.error("❌ Cloudinary upload failed:", cloudinaryError)
+      const errorDetails = cloudinaryError instanceof Error ? cloudinaryError.message : String(cloudinaryError)
+      console.error("Error details:", errorDetails)
       return NextResponse.json({
         error: "Cloudinary upload failed",
-        details: cloudinaryError instanceof Error ? cloudinaryError.message : String(cloudinaryError)
+        message: `Failed to upload to Cloudinary: ${errorDetails}`,
+        details: errorDetails
       }, { status: 500 })
     }
     
   } catch (error) {
-    console.log("💥 Unexpected error:", error)
+    console.error("💥 Unexpected error in upload API:", error)
+    const errorDetails = error instanceof Error ? error.message : String(error)
+    console.error("Error stack:", error instanceof Error ? error.stack : 'No stack trace')
     return NextResponse.json({
       error: "Internal server error",
-      details: error instanceof Error ? error.message : String(error)
+      message: `Upload failed: ${errorDetails}`,
+      details: errorDetails
     }, { status: 500 })
   }
 }

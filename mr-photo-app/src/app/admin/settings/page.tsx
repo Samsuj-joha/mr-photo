@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Settings,
@@ -26,13 +27,18 @@ import {
   EyeOff,
   Camera,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  Key,
+  CheckCircle,
+  Loader2
 } from "lucide-react"
+import { toast } from "sonner"
 
 export default function AdminSettings() {
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showApiKey, setShowApiKey] = useState(false)
+  const [testingProvider, setTestingProvider] = useState<string | null>(null)
 
   // Site Settings State
   const [siteSettings, setSiteSettings] = useState({
@@ -96,6 +102,79 @@ export default function AdminSettings() {
     webhookUrl: "https://mrphotography.com/webhook",
   })
 
+  // Image Analysis API Settings State
+  const [imageAnalysisSettings, setImageAnalysisSettings] = useState({
+    activeProvider: "clarifai", // "google", "clarifai", "azure"
+    googleApiKey: "",
+    clarifaiApiKey: "",
+    azureEndpoint: "",
+    azureKey: "",
+  })
+
+  // Load settings on mount
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const response = await fetch('/api/admin/settings/image-analysis')
+        if (response.ok) {
+          const data = await response.json()
+          setImageAnalysisSettings(prev => ({
+            ...prev,
+            activeProvider: data.activeProvider || "clarifai",
+            // Don't load actual keys for security, just show if configured
+            googleApiKey: data.googleApiKey === "***configured***" ? "" : data.googleApiKey || "",
+            clarifaiApiKey: data.clarifaiApiKey === "***configured***" ? "" : data.clarifaiApiKey || "",
+            azureEndpoint: data.azureEndpoint || "",
+            azureKey: data.azureKey === "***configured***" ? "" : data.azureKey || "",
+          }))
+        }
+      } catch (error) {
+        console.error('Error loading settings:', error)
+      }
+    }
+    
+    const loadDatabaseSettings = async () => {
+      setLoadingDatabaseSettings(true)
+      try {
+        const response = await fetch('/api/admin/settings')
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success) {
+            setDatabaseSettings({
+              categories: data.categories || [],
+              settings: data.settings || {}
+            })
+          }
+        }
+      } catch (error) {
+        console.error('Error loading database settings:', error)
+      } finally {
+        setLoadingDatabaseSettings(false)
+      }
+    }
+    
+    const loadAllCategories = async () => {
+      setLoadingCategories(true)
+      try {
+        const response = await fetch('/api/admin/categories/all')
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success) {
+            setAllCategories(data.categories || [])
+          }
+        }
+      } catch (error) {
+        console.error('Error loading categories:', error)
+      } finally {
+        setLoadingCategories(false)
+      }
+    }
+    
+    loadSettings()
+    loadDatabaseSettings()
+    loadAllCategories()
+  }, [])
+
   // Notification Settings State
   const [notificationSettings, setNotificationSettings] = useState({
     emailNotifications: true,
@@ -106,16 +185,143 @@ export default function AdminSettings() {
     marketingEmails: false,
   })
 
+  // Database Settings State
+  const [databaseSettings, setDatabaseSettings] = useState<{
+    categories: string[]
+    settings: Record<string, Array<{ key: string; value: string | null; description: string | null }>>
+  }>({
+    categories: [],
+    settings: {}
+  })
+  const [loadingDatabaseSettings, setLoadingDatabaseSettings] = useState(false)
+  
+  // All Categories State (from galleries, images, portfolios)
+  const [allCategories, setAllCategories] = useState<Array<{ id: number; name: string }>>([])
+  const [loadingCategories, setLoadingCategories] = useState(false)
+
+  // Test API Key
+  const testApiKey = async (provider: string) => {
+    setTestingProvider(provider)
+    try {
+      let testResult = { success: false, message: "" }
+      
+      if (provider === "clarifai") {
+        if (!imageAnalysisSettings.clarifaiApiKey) {
+          toast.error("Please enter Clarifai API key first")
+          return
+        }
+        // Test Clarifai API
+        const response = await fetch("https://api.clarifai.com/v2/users/clarifai/apps/main/models", {
+          headers: {
+            "Authorization": `Key ${imageAnalysisSettings.clarifaiApiKey}`,
+            "Content-Type": "application/json",
+          },
+        })
+        if (response.ok) {
+          testResult = { success: true, message: "Clarifai API is working!" }
+          toast.success("Clarifai API is working!")
+        } else {
+          testResult = { success: false, message: "Invalid API key" }
+          toast.error("Invalid Clarifai API key")
+        }
+      } else if (provider === "google") {
+        if (!imageAnalysisSettings.googleApiKey) {
+          toast.error("Please enter Google Vision API key first")
+          return
+        }
+        // Test Google Vision API
+        const response = await fetch(
+          `https://vision.googleapis.com/v1/images:annotate?key=${imageAnalysisSettings.googleApiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              requests: [{
+                image: { content: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" },
+                features: [{ type: "LABEL_DETECTION", maxResults: 1 }],
+              }],
+            }),
+          }
+        )
+        const data = await response.json()
+        if (data.error) {
+          testResult = { success: false, message: `Error: ${data.error.message}` }
+          toast.error(`Google Vision API Error: ${data.error.message}`)
+        } else {
+          testResult = { success: true, message: "Google Vision API is working!" }
+          toast.success("Google Vision API is working!")
+        }
+      } else if (provider === "azure") {
+        if (!imageAnalysisSettings.azureEndpoint || !imageAnalysisSettings.azureKey) {
+          toast.error("Please enter Azure endpoint and key first")
+          return
+        }
+        // Test Azure Vision API
+        const response = await fetch(`${imageAnalysisSettings.azureEndpoint}/vision/v3.2/models`, {
+          headers: { "Ocp-Apim-Subscription-Key": imageAnalysisSettings.azureKey },
+        })
+        if (response.ok) {
+          testResult = { success: true, message: "Azure AI Vision is working!" }
+          toast.success("Azure AI Vision is working!")
+        } else {
+          testResult = { success: false, message: `Error: ${response.statusText}` }
+          toast.error(`Azure Vision API Error: ${response.statusText}`)
+        }
+      }
+    } catch (error: any) {
+      toast.error(`Connection error: ${error.message}`)
+    } finally {
+      setTestingProvider(null)
+    }
+  }
+
   // Handle Save Function
-  const handleSave = async (section) => {
+  const handleSave = async (section: string) => {
     setIsLoading(true)
     try {
-      // Simulate API call
+      if (section === 'api') {
+        // Save image analysis API settings
+        const response = await fetch('/api/admin/settings/image-analysis', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            activeProvider: imageAnalysisSettings.activeProvider,
+            googleApiKey: imageAnalysisSettings.googleApiKey,
+            clarifaiApiKey: imageAnalysisSettings.clarifaiApiKey,
+            azureEndpoint: imageAnalysisSettings.azureEndpoint,
+            azureKey: imageAnalysisSettings.azureKey,
+          }),
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          toast.success("Settings saved! Please add API keys to your .env file and restart the server.")
+          console.log('Instructions:', data.instructions)
+          
+          // Refresh database settings to show newly saved settings
+          const dbResponse = await fetch('/api/admin/settings')
+          if (dbResponse.ok) {
+            const dbData = await dbResponse.json()
+            if (dbData.success) {
+              setDatabaseSettings({
+                categories: dbData.categories || [],
+                settings: dbData.settings || {}
+              })
+            }
+          }
+        } else {
+          toast.error('Failed to save image analysis settings')
+        }
+      }
+      
+      // Simulate API call for other settings
       await new Promise(resolve => setTimeout(resolve, 1000))
-      console.log(`${section} settings saved successfully!`)
-      // You can add toast notification here
+      if (section !== 'api') {
+        toast.success(`${section} settings saved successfully!`)
+      }
     } catch (error) {
       console.error("Error saving settings:", error)
+      toast.error("Failed to save settings")
     } finally {
       setIsLoading(false)
     }
@@ -173,7 +379,7 @@ export default function AdminSettings() {
 
       {/* Settings Tabs */}
       <Tabs defaultValue="general" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-7">
+        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-8">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="email">Email</TabsTrigger>
@@ -181,6 +387,7 @@ export default function AdminSettings() {
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
           <TabsTrigger value="api">API</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
+          <TabsTrigger value="database">Database Settings</TabsTrigger>
         </TabsList>
 
         {/* General Settings Tab */}
@@ -764,6 +971,205 @@ export default function AdminSettings() {
 
               <Separator />
 
+              <h3 className="text-lg font-medium">Image Analysis API (Auto-Categorization)</h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Configure AI providers for automatic image categorization when uploading photos
+              </p>
+
+              {/* Provider Selection */}
+              <div className="mb-4">
+                <Label htmlFor="activeProvider">Active Provider</Label>
+                <Select 
+                  value={imageAnalysisSettings.activeProvider} 
+                  onValueChange={(value) => setImageAnalysisSettings(prev => ({ ...prev, activeProvider: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="clarifai">Clarifai Community (Recommended - Free)</SelectItem>
+                    <SelectItem value="google">Google Vision API</SelectItem>
+                    <SelectItem value="azure">Azure AI Vision</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Clarifai Settings */}
+              <div className="space-y-4 p-4 border rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="clarifaiApiKey" className="text-base font-semibold">Clarifai Community</Label>
+                    <p className="text-sm text-gray-500">
+                      Get your API key from{" "}
+                      <a 
+                        href="https://clarifai.com" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        https://clarifai.com
+                      </a>
+                    </p>
+                  </div>
+                  {imageAnalysisSettings.activeProvider === "clarifai" && (
+                    <Badge className="bg-green-600">Active</Badge>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="clarifaiApiKey">API Key</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="clarifaiApiKey"
+                      type={showApiKey ? "text" : "password"}
+                      placeholder="Enter Clarifai API Key (e.g., d9244c0df25e429eb44ce0fb781d97c8)"
+                      value={imageAnalysisSettings.clarifaiApiKey}
+                      onChange={(e) => setImageAnalysisSettings(prev => ({ ...prev, clarifaiApiKey: e.target.value }))}
+                      className="flex-1"
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() => testApiKey("clarifai")}
+                      disabled={testingProvider === "clarifai" || !imageAnalysisSettings.clarifaiApiKey}
+                    >
+                      {testingProvider === "clarifai" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Key className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Google Vision Settings */}
+              <div className="space-y-4 p-4 border rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="googleApiKey" className="text-base font-semibold">Google Vision API</Label>
+                    <p className="text-sm text-gray-500">
+                      Get your API key from{" "}
+                      <a 
+                        href="https://console.cloud.google.com" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        https://console.cloud.google.com
+                      </a>
+                    </p>
+                  </div>
+                  {imageAnalysisSettings.activeProvider === "google" && (
+                    <Badge className="bg-green-600">Active</Badge>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="googleApiKey">API Key</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="googleApiKey"
+                      type={showApiKey ? "text" : "password"}
+                      placeholder="Enter Google Vision API Key"
+                      value={imageAnalysisSettings.googleApiKey}
+                      onChange={(e) => setImageAnalysisSettings(prev => ({ ...prev, googleApiKey: e.target.value }))}
+                      className="flex-1"
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() => testApiKey("google")}
+                      disabled={testingProvider === "google" || !imageAnalysisSettings.googleApiKey}
+                    >
+                      {testingProvider === "google" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Key className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Azure Settings */}
+              <div className="space-y-4 p-4 border rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="azureEndpoint" className="text-base font-semibold">Azure AI Vision</Label>
+                    <p className="text-sm text-gray-500">
+                      Get your credentials from{" "}
+                      <a 
+                        href="https://portal.azure.com" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        https://portal.azure.com
+                      </a>
+                    </p>
+                  </div>
+                  {imageAnalysisSettings.activeProvider === "azure" && (
+                    <Badge className="bg-green-600">Active</Badge>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="azureEndpoint">Endpoint</Label>
+                  <Input
+                    id="azureEndpoint"
+                    placeholder="https://your-name.cognitiveservices.azure.com"
+                    value={imageAnalysisSettings.azureEndpoint}
+                    onChange={(e) => setImageAnalysisSettings(prev => ({ ...prev, azureEndpoint: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="azureKey">API Key</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="azureKey"
+                      type={showApiKey ? "text" : "password"}
+                      placeholder="Enter Azure API Key"
+                      value={imageAnalysisSettings.azureKey}
+                      onChange={(e) => setImageAnalysisSettings(prev => ({ ...prev, azureKey: e.target.value }))}
+                      className="flex-1"
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() => testApiKey("azure")}
+                      disabled={testingProvider === "azure" || !imageAnalysisSettings.azureEndpoint || !imageAnalysisSettings.azureKey}
+                    >
+                      {testingProvider === "azure" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Key className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <div className="flex items-start space-x-2">
+                  <AlertTriangle className="h-4 w-4 text-blue-600 mt-0.5" />
+                  <div className="text-sm text-blue-800 dark:text-blue-300">
+                    <p className="font-medium mb-1">Important:</p>
+                    <p className="mb-2">Only one provider can be active at a time. The active provider will be used for automatic image categorization when uploading photos.</p>
+                    <p className="font-medium mt-2 mb-1">To use these settings:</p>
+                    <ol className="list-decimal list-inside space-y-1 ml-2">
+                      <li>Enter your API key above</li>
+                      <li>Click the key icon to test the API</li>
+                      <li>Add the key to your <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">.env</code> file:
+                        <ul className="list-disc list-inside ml-4 mt-1 space-y-1">
+                          <li>Clarifai: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">CLARIFAI_API_KEY=your_key</code></li>
+                          <li>Google: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">GOOGLE_VISION_API_KEY=your_key</code></li>
+                          <li>Azure: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">AZURE_COMPUTER_VISION_ENDPOINT=your_endpoint</code> and <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">AZURE_COMPUTER_VISION_KEY=your_key</code></li>
+                        </ul>
+                      </li>
+                      <li>Add <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">IMAGE_ANALYSIS_PROVIDER={imageAnalysisSettings.activeProvider}</code> to .env</li>
+                      <li>Restart your server for changes to take effect</li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
               <h3 className="text-lg font-medium">API Access</h3>
 
               <div className="flex items-center justify-between">
@@ -791,27 +1197,154 @@ export default function AdminSettings() {
                       <RefreshCw className="h-4 w-4 mr-2" />
                       Regenerate
                     </Button>
-                                </div>
-                              </div>
-                            )}
+                  </div>
+                </div>
+              )}
               
-                            <div>
-                              <Label htmlFor="webhookUrl">Webhook URL</Label>
-                              <Input
-                                id="webhookUrl"
-                                value={apiSettings.webhookUrl}
-                                onChange={(e) => setApiSettings(prev => ({ ...prev, webhookUrl: e.target.value }))}
-                              />
-                            </div>
+              <div>
+                <Label htmlFor="webhookUrl">Webhook URL</Label>
+                <Input
+                  id="webhookUrl"
+                  value={apiSettings.webhookUrl}
+                  onChange={(e) => setApiSettings(prev => ({ ...prev, webhookUrl: e.target.value }))}
+                />
+              </div>
               
-                            <div className="flex justify-end">
-                              <Button onClick={() => handleSave('api')} disabled={isLoading}>
-                                <Save className="h-4 w-4 mr-2" />
-                                {isLoading ? "Saving..." : "Save Changes"}
-                              </Button>
-                            </div>
+              <div className="flex justify-end">
+                <Button onClick={() => handleSave('api')} disabled={isLoading}>
+                  <Save className="h-4 w-4 mr-2" />
+                  {isLoading ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
                           </CardContent>
                         </Card>
+                      </TabsContent>
+
+                      {/* Database Settings Tab */}
+                      <TabsContent value="database">
+                        <div className="space-y-6">
+                          {/* Settings Section */}
+                          <Card>
+                            <CardHeader>
+                              <CardTitle className="flex items-center">
+                                <Database className="h-5 w-5 mr-2" />
+                                Database Settings
+                              </CardTitle>
+                              <CardDescription>
+                                View all settings stored in the database, grouped by category
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                              {loadingDatabaseSettings ? (
+                                <div className="flex items-center justify-center py-8">
+                                  <Loader2 className="h-6 w-6 animate-spin" />
+                                  <span className="ml-2">Loading settings...</span>
+                                </div>
+                              ) : databaseSettings.categories.length === 0 ? (
+                                <div className="text-center py-8 text-gray-500">
+                                  <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                                  <p>No settings found in the database.</p>
+                                  <p className="text-sm mt-2">Settings will appear here after you save them from other tabs.</p>
+                                </div>
+                              ) : (
+                                <div className="space-y-6">
+                                  {databaseSettings.categories.map((category) => (
+                                    <div key={category} className="border rounded-lg p-4">
+                                      <h3 className="text-lg font-semibold mb-4 capitalize flex items-center">
+                                        <Badge variant="outline" className="mr-2">{category}</Badge>
+                                        {databaseSettings.settings[category]?.length || 0} setting(s)
+                                      </h3>
+                                      <div className="space-y-3">
+                                        {databaseSettings.settings[category]?.map((setting) => (
+                                          <div key={setting.key} className="bg-gray-50 dark:bg-gray-800 rounded p-3">
+                                            <div className="flex items-start justify-between">
+                                              <div className="flex-1">
+                                                <div className="font-medium text-sm text-gray-900 dark:text-white">
+                                                  {setting.key}
+                                                </div>
+                                                {setting.description && (
+                                                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                    {setting.description}
+                                                  </div>
+                                                )}
+                                                <div className="text-xs text-gray-600 dark:text-gray-300 mt-2 font-mono bg-white dark:bg-gray-900 p-2 rounded">
+                                                  {setting.value ? (
+                                                    setting.value.length > 100 ? (
+                                                      <span>{setting.value.substring(0, 100)}...</span>
+                                                    ) : (
+                                                      <span>{setting.value}</span>
+                                                    )
+                                                  ) : (
+                                                    <span className="text-gray-400 italic">(empty)</span>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+
+                          {/* All Categories Section */}
+                          <Card>
+                            <CardHeader>
+                              <CardTitle className="flex items-center">
+                                <Database className="h-5 w-5 mr-2" />
+                                All Categories in Project
+                              </CardTitle>
+                              <CardDescription>
+                                All categories found in galleries, images, and portfolios. These are used for image analysis.
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                              {loadingCategories ? (
+                                <div className="flex items-center justify-center py-8">
+                                  <Loader2 className="h-6 w-6 animate-spin" />
+                                  <span className="ml-2">Loading categories...</span>
+                                </div>
+                              ) : allCategories.length === 0 ? (
+                                <div className="text-center py-8 text-gray-500">
+                                  <p>No categories found in the database.</p>
+                                  <p className="text-sm mt-2">Categories will appear here as you add galleries, images, or portfolios.</p>
+                                </div>
+                              ) : (
+                                <div className="space-y-4">
+                                  <div className="flex items-center justify-between mb-4">
+                                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                                      Found {allCategories.length} unique categor{allCategories.length === 1 ? 'y' : 'ies'}
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    {allCategories.map((category) => (
+                                      <Badge key={category.id} variant="secondary" className="px-3 py-1 text-sm">
+                                        {category.name}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                  <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                                    <div className="flex items-start space-x-2">
+                                      <AlertTriangle className="h-4 w-4 text-blue-600 mt-0.5" />
+                                      <div className="text-sm text-blue-800 dark:text-blue-300">
+                                        <p className="font-medium mb-1">How Categories Work:</p>
+                                        <ul className="list-disc list-inside space-y-1 ml-2">
+                                          <li>These categories are automatically detected from your galleries, images, and portfolios</li>
+                                          <li>When analyzing images, the AI will match detected labels to these categories</li>
+                                          <li>Database categories have higher priority than hardcoded categories</li>
+                                          <li>You can add more categories by creating galleries, images, or portfolios with new category names</li>
+                                        </ul>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        </div>
                       </TabsContent>
                     </Tabs>
                   </div>

@@ -1,8 +1,9 @@
 // File: src/app/api/blog-upload/route.ts
-// Simple blog upload API using your existing uploadImage function
+// Blog upload API with 10MB image processing
 
 import { NextRequest, NextResponse } from "next/server"
-import { uploadImage } from "@/lib/cloudinary"
+import { processImageForUpload } from "@/lib/imageProcessor"
+import { v2 as cloudinary } from 'cloudinary'
 
 export async function POST(request: NextRequest) {
   console.log('🚀 Blog upload API called')
@@ -33,18 +34,37 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validate file size (max 10MB)
-    const maxSize = 10 * 1024 * 1024
-    if (file.size > maxSize) {
-      return NextResponse.json(
-        { error: "File size must be less than 10MB" },
-        { status: 400 }
-      )
-    }
+    // Process image to ensure 10MB or less
+    console.log('🔄 Processing image...')
+    const processed = await processImageForUpload(file)
+    console.log(`✅ Image processed: ${(processed.buffer.length / 1024 / 1024).toFixed(2)}MB`)
 
-    // Upload using your existing function
+    // Configure Cloudinary
+    cloudinary.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+    })
+
+    // Upload processed image to Cloudinary
     console.log('☁️ Starting Cloudinary upload...')
-    const uploadResult = await uploadImage(file, "mr-photography/blog") as any
+    const uploadResult = await new Promise((resolve, reject) => {
+      cloudinary.uploader.upload_stream(
+        {
+          folder: 'mr-photography/blog',
+          resource_type: 'auto',
+          transformation: [
+            { quality: 'auto:best' },
+            { fetch_format: 'auto' }
+          ],
+          public_id: processed.fileName.replace(/\.[^/.]+$/, ''),
+        },
+        (error, result) => {
+          if (error) reject(error)
+          else resolve(result)
+        }
+      ).end(processed.buffer)
+    }) as any
 
     if (!uploadResult) {
       throw new Error('Cloudinary upload returned no result')

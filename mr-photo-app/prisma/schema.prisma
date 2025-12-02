@@ -60,7 +60,7 @@ model Gallery {
   title       String
   description String?
   category    String
-  country     String?        // Country field for your form
+  country     String? // Country field for your form
   images      GalleryImage[]
   featured    Boolean        @default(false)
   published   Boolean        @default(true)
@@ -75,7 +75,9 @@ model GalleryImage {
   alt       String?
   caption   String?
   order     Int      @default(0)
-  loves     Int      @default(0)  // Loves field for heart icon counting
+  loves     Int      @default(0) // Loves field for heart icon counting
+  year      Int? // Auto-extracted year from upload date for filtering
+  category  String? // Auto-detected category: Birds, Animal, Ocean, Nature, Peace in Mind, Others
   galleryId String
   gallery   Gallery  @relation(fields: [galleryId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
@@ -97,17 +99,17 @@ model Portfolio {
 }
 
 model Blog {
-  id          String   @id @default(cuid())
-  title       String
-  slug        String   @unique
-  content     String   @db.Text
-  excerpt     String?
-  coverImage  String?
-  published   Boolean  @default(false)
-  featured    Boolean  @default(false)
-  tags        String[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  title      String
+  slug       String   @unique
+  content    String   @db.Text
+  excerpt    String?
+  coverImage String?
+  published  Boolean  @default(false)
+  featured   Boolean  @default(false)
+  tags       String[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model Contact {
@@ -126,76 +128,76 @@ model HomeSlider {
   title       String?
   description String?
   imageUrl    String
-  publicId    String   // Cloudinary public ID
+  publicId    String // Cloudinary public ID
   alt         String?
   order       Int      @default(0)
   active      Boolean  @default(true)
-  linkUrl     String?  // Optional link for the slide
-  linkText    String?  // Optional link text
+  linkUrl     String? // Optional link for the slide
+  linkText    String? // Optional link text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
 
 model About {
-  id                   String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Section 1: Basic Info
   name                 String
-  description          String   @db.Text
+  description          String  @db.Text
   profileImage         String?
   profileImagePublicId String?
-  
+
   // Section 2: Photography Journey
-  journeyTitle         String   @default("My Photography Journey")
-  journeyContent       String   @db.Text
-  
+  journeyTitle   String @default("My Photography Journey")
+  journeyContent String @db.Text
+
   // Section 3: Values & Approach
-  valuesTitle          String   @default("My Values & Approach")
-  valuesContent        String   @db.Text
-  
+  valuesTitle   String @default("My Values & Approach")
+  valuesContent String @db.Text
+
   // Meta
-  published            Boolean  @default(true)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  published Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // 🆕 BOOK MODELS
 model Book {
-  id              String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Basic Info
-  title           String
-  subtitle        String?
-  author          String   @default("Moshiur Rahman")
-  description     String   @db.Text
-  
+  title       String
+  subtitle    String?
+  author      String  @default("Moshiur Rahman")
+  description String  @db.Text
+
   // Book Details
-  volume          String   // e.g., "Volume 1.0", "Volume 2.0"
-  pages           Int      // Number of pages
-  rating          Float    @default(0.0) // Rating out of 5
-  category        String   // e.g., "Documentary Series", "Visual Journey"
-  
+  volume   String // e.g., "Volume 1.0", "Volume 2.0"
+  pages    Int // Number of pages
+  rating   Float  @default(0.0) // Rating out of 5
+  category String // e.g., "Documentary Series", "Visual Journey"
+
   // Images & Files
-  coverImage      String?  // Cover image URL
+  coverImage         String? // Cover image URL
   coverImagePublicId String? // Cloudinary public ID
-  pdfUrl          String?  // PDF file URL
-  pdfPublicId     String?  // Cloudinary public ID for PDF
-  
+  pdfUrl             String? // PDF file URL
+  pdfPublicId        String? // Cloudinary public ID for PDF
+
   // SEO & Display
-  slug            String   @unique // URL-friendly version of title
-  featured        Boolean  @default(false)
-  published       Boolean  @default(true)
-  
+  slug      String  @unique // URL-friendly version of title
+  featured  Boolean @default(false)
+  published Boolean @default(true)
+
   // Order & Display
-  order           Int      @default(0) // Display order
-  
+  order Int @default(0) // Display order
+
   // Timestamps
-  publishedAt     DateTime? // When the book was published
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
+  publishedAt DateTime? // When the book was published
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
   // Relations
-  tags            BookTag[]
+  tags BookTag[]
 }
 
 model BookTag {
@@ -204,7 +206,7 @@ model BookTag {
   color  String @default("blue") // Color for the tag (blue, purple, green, etc.)
   bookId String
   book   Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
-  
+
   @@unique([name, bookId]) // Prevent duplicate tags for the same book
 }
 
@@ -213,14 +215,28 @@ model Feature {
   id          String   @id @default(cuid())
   title       String
   description String   @db.Text
-  image       String?  // Image URL from Cloudinary
-  publicId    String?  // Cloudinary public ID for image management
-  icon        String?  // Icon name (lucide-react icon name) as fallback
+  image       String? // Image URL from Cloudinary
+  publicId    String? // Cloudinary public ID for image management
+  icon        String? // Icon name (lucide-react icon name) as fallback
   published   Boolean  @default(true)
   featured    Boolean  @default(false)
   order       Int      @default(0) // Display order
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// 🆕 SETTINGS MODEL - For storing API keys and configuration
+model Settings {
+  id                String   @id @default(cuid())
+  key               String   @unique // Setting key (e.g., "image_analysis_provider", "clarifai_api_key")
+  value             String?  @db.Text // Setting value (encrypted or plain text)
+  description       String? // Description of what this setting does
+  category          String? // Category like "api", "general", etc.
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([key])
+  @@index([category])
 }
 
 enum Role {

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { uploadImage, deleteImage } from "@/lib/cloudinary"
+import { deleteImage } from "@/lib/cloudinary"
+import { processImageForUpload } from "@/lib/imageProcessor"
+import { v2 as cloudinary } from 'cloudinary'
 
 // POST - Upload profile image
 export async function POST(request: NextRequest) {
@@ -24,15 +26,37 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "File must be an image" }, { status: 400 })
     }
 
-    // Validate file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      return NextResponse.json({ error: "File size must be less than 10MB" }, { status: 400 })
-    }
+    console.log(`🔄 Processing profile image: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`)
 
-    console.log(`🔄 Uploading profile image: ${file.name}`)
+    // Process image to ensure 10MB or less
+    const processed = await processImageForUpload(file)
+    console.log(`✅ Image processed: ${(processed.buffer.length / 1024 / 1024).toFixed(2)}MB`)
 
-    // Upload to Cloudinary
-    const uploadResult = await uploadImage(file, 'mr-photography/about')
+    // Configure Cloudinary
+    cloudinary.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+    })
+
+    // Upload processed image to Cloudinary
+    const uploadResult = await new Promise((resolve, reject) => {
+      cloudinary.uploader.upload_stream(
+        {
+          folder: 'mr-photography/about',
+          resource_type: 'auto',
+          transformation: [
+            { quality: 'auto:best' },
+            { fetch_format: 'auto' }
+          ],
+          public_id: processed.fileName.replace(/\.[^/.]+$/, ''),
+        },
+        (error, result) => {
+          if (error) reject(error)
+          else resolve(result)
+        }
+      ).end(processed.buffer)
+    }) as any
 
     return NextResponse.json({
       url: uploadResult.secure_url,
