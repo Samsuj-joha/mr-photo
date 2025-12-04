@@ -4,8 +4,6 @@ import { db } from "@/lib/db"
 
 export async function GET() {
   try {
-    console.log("📂 Fetching categories from database...")
-    
     // Get unique categories from IMAGES (not galleries) - this is what users see
     const imageCategories = await db.galleryImage.groupBy({
       by: ['category'],
@@ -22,8 +20,6 @@ export async function GET() {
         category: true
       }
     })
-
-    console.log(`✅ Found ${imageCategories.length} unique image categories:`, imageCategories)
 
     // Also get categories from galleries as fallback
     const galleryCategories = await db.gallery.groupBy({
@@ -101,8 +97,6 @@ export async function GET() {
         count: count
       }))
       .sort((a, b) => b.count - a.count) // Sort by count descending
-
-    console.log(`🎯 Returning formatted categories:`, formattedCategories)
 
     return NextResponse.json({ 
       categories: formattedCategories,

@@ -8,16 +8,19 @@ import { deleteImage } from "@/lib/cloudinary"
 // GET - Fetch single gallery
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Await params in Next.js 15
+    const { id } = await params
+    
     // For admin panel, fetch gallery without published filter
     // For public, only show published galleries
     const { searchParams } = new URL(request.url)
     const skipPublishedCheck = searchParams.get("skipPublishedCheck") === "true"
     
     const gallery = await db.gallery.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         images: {
           orderBy: { order: "asc" }
@@ -77,9 +80,12 @@ export async function GET(
 // PUT - Update gallery
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Await params in Next.js 15
+    const { id } = await params
+    
     const session = await getServerSession(authOptions)
     
     if (!session || session.user.role !== "ADMIN") {
@@ -101,7 +107,7 @@ export async function PUT(
     }
 
     const gallery = await db.gallery.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         title,
         description,

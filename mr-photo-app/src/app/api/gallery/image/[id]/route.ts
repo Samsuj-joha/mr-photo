@@ -8,9 +8,12 @@ import { deleteImage } from "@/lib/cloudinary"
 // DELETE - Delete gallery image
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Await params in Next.js 15
+    const { id: imageId } = await params
+    
     const session = await getServerSession(authOptions)
     
     if (!session || session.user.role !== "ADMIN") {
@@ -19,8 +22,6 @@ export async function DELETE(
         { status: 401 }
       )
     }
-
-    const imageId = params.id
 
     // Find the image first
     const image = await db.galleryImage.findUnique({

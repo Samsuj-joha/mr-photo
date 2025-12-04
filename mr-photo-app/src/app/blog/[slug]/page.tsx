@@ -67,6 +67,7 @@ export default function BlogPostPage() {
   const [isSubmittingComment, setIsSubmittingComment] = useState(false)
   const [commentSubmitted, setCommentSubmitted] = useState(false)
   const [urlCopied, setUrlCopied] = useState(false)
+  const [imageError, setImageError] = useState(false)
   
   // Comment form state
   const [commentForm, setCommentForm] = useState<CommentForm>({
@@ -287,7 +288,7 @@ export default function BlogPostPage() {
         <article className="space-y-8">
           
           {/* Cover Image */}
-          {post.coverImage && (
+          {post.coverImage && !imageError ? (
             <div className="relative w-full h-96 md:h-[500px] rounded-2xl overflow-hidden">
               <Image
                 src={post.coverImage}
@@ -296,10 +297,9 @@ export default function BlogPostPage() {
                 className="object-cover"
                 priority
                 unoptimized={post.coverImage.includes('cloudinary.com')}
-                onError={(e) => {
-                  console.error('Failed to load blog cover image:', post.coverImage)
-                  const target = e.currentTarget as HTMLImageElement
-                  target.style.display = 'none'
+                onError={() => {
+                  // Silently handle error and show fallback
+                  setImageError(true)
                 }}
               />
               {post.featured && (
@@ -308,7 +308,19 @@ export default function BlogPostPage() {
                 </Badge>
               )}
             </div>
-          )}
+          ) : post.coverImage && imageError ? (
+            <div className="relative w-full h-96 md:h-[500px] rounded-2xl overflow-hidden bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800 flex items-center justify-center">
+              <div className="text-center">
+                <BookOpen className="w-20 h-20 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500 dark:text-gray-400 text-sm">Cover image unavailable</p>
+              </div>
+              {post.featured && (
+                <Badge className="absolute top-6 left-6 bg-yellow-500 text-white">
+                  Featured
+                </Badge>
+              )}
+            </div>
+          ) : null}
 
           {/* Article Header */}
           <div className="space-y-6">

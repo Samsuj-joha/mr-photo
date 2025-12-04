@@ -7,10 +7,11 @@ import { db } from '@/lib/db'
 // POST - Increment love count for a portfolio project
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = params.id
+    // Await params in Next.js 15
+    const { id } = await params
 
     // Find the portfolio to make sure it exists
     const portfolio = await db.portfolio.findUnique({

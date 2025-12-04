@@ -7,18 +7,14 @@ import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { 
-  Search, 
   Calendar,
   Clock,
-  User,
   ArrowRight,
   BookOpen,
-  Tag,
   TrendingUp,
   RefreshCw,
   AlertCircle
@@ -40,20 +36,12 @@ interface BlogPost {
 
 export default function BlogPage() {
   const [posts, setPosts] = useState<BlogPost[]>([])
-  const [searchQuery, setSearchQuery] = useState("")
-  const [selectedTag, setSelectedTag] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [allTags, setAllTags] = useState<string[]>([])
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set())
 
-  // Filter posts based on search and tag
-  const filteredPosts = posts.filter(post => {
-    const matchesSearch = post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         (post.excerpt?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
-                         post.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
-    const matchesTag = !selectedTag || post.tags.includes(selectedTag)
-    return matchesSearch && matchesTag && post.published
-  })
+  // Filter posts - only show published posts
+  const filteredPosts = posts.filter(post => post.published)
 
   const featuredPosts = filteredPosts.filter(post => post.featured)
   const regularPosts = filteredPosts.filter(post => !post.featured)
@@ -84,16 +72,6 @@ export default function BlogPage() {
         console.log(`✅ Fetched ${publishedPosts.length} blog posts`)
         
         setPosts(publishedPosts)
-        
-        // Extract all unique tags from published posts
-        const tagsSet = new Set<string>()
-        publishedPosts.forEach(post => {
-          post.tags.forEach(tag => tagsSet.add(tag))
-        })
-        const sortedTags = Array.from(tagsSet).sort()
-        setAllTags(sortedTags)
-        
-        console.log(`📊 Found ${publishedPosts.length} published posts with ${sortedTags.length} unique tags`)
         
       } catch (error) {
         console.error('❌ Error fetching posts:', error)
@@ -153,74 +131,6 @@ export default function BlogPage() {
   return (
     <div className="min-h-screen py-20">
       <div className="container mx-auto px-4">
-        
-        {/* Header */}
-        <div className="text-center mb-16">
-          <h1 className="text-4xl md:text-5xl font-light text-gray-900 dark:text-white mb-6">
-            Photography Blog
-          </h1>
-          <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-            Insights, tips, and stories from behind the lens. Discover the art and craft of professional photography.
-          </p>
-        </div>
-
-        {/* Search and Filter */}
-        <div className="mb-12">
-          <div className="flex flex-col lg:flex-row gap-6 items-start">
-            
-            {/* Search */}
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-                <Input
-                  placeholder="Search articles, topics, or tags..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-11 h-12 text-base"
-                  disabled={isLoading}
-                />
-              </div>
-            </div>
-
-            {/* Tags Filter */}
-            <div className="w-full lg:w-auto">
-              <div className="flex flex-wrap gap-2">
-                <Badge 
-                  variant={!selectedTag ? "default" : "outline"}
-                  className="cursor-pointer"
-                  onClick={() => setSelectedTag("")}
-                >
-                  All Posts
-                </Badge>
-                {allTags.map((tag) => (
-                  <Badge
-                    key={tag}
-                    variant={selectedTag === tag ? "default" : "outline"}
-                    className="cursor-pointer capitalize"
-                    onClick={() => setSelectedTag(tag === selectedTag ? "" : tag)}
-                  >
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-
-          </div>
-        </div>
-
-        {/* Results Count */}
-        {!isLoading && !error && (
-          <div className="mb-8">
-            <p className="text-gray-600 dark:text-gray-400">
-              Showing {filteredPosts.length} article{filteredPosts.length !== 1 ? 's' : ''}
-              {selectedTag && (
-                <span className="ml-2">
-                  tagged with <Badge variant="secondary" className="capitalize">{selectedTag}</Badge>
-                </span>
-              )}
-            </p>
-          </div>
-        )}
 
         {/* Error State */}
         {error && (
@@ -285,17 +195,16 @@ export default function BlogPage() {
                     <Card key={post.id} className="group cursor-pointer overflow-hidden hover:shadow-xl transition-all duration-300">
                       <Link href={`/blog/${post.slug}`}>
                         <div className="relative h-64 overflow-hidden">
-                          {post.coverImage ? (
+                          {post.coverImage && !failedImages.has(post.id) ? (
                             <Image
                               src={post.coverImage}
                               alt={post.title}
                               fill
                               className="object-cover group-hover:scale-110 transition-transform duration-500"
                               unoptimized={post.coverImage.includes('cloudinary.com')}
-                              onError={(e) => {
-                                console.error('Failed to load blog cover image:', post.coverImage)
-                                const target = e.currentTarget as HTMLImageElement
-                                target.style.display = 'none'
+                              onError={() => {
+                                // Silently handle error and show fallback
+                                setFailedImages(prev => new Set(prev).add(post.id))
                               }}
                             />
                           ) : (
@@ -329,19 +238,7 @@ export default function BlogPage() {
                         </CardHeader>
                         
                         <CardContent>
-                          <div className="flex items-center justify-between">
-                            <div className="flex flex-wrap gap-1">
-                              {post.tags.slice(0, 3).map((tag) => (
-                                <Badge key={tag} variant="outline" className="text-xs capitalize">
-                                  {tag}
-                                </Badge>
-                              ))}
-                              {post.tags.length > 3 && (
-                                <Badge variant="outline" className="text-xs">
-                                  +{post.tags.length - 3}
-                                </Badge>
-                              )}
-                            </div>
+                          <div className="flex items-center justify-end">
                             <Button variant="ghost" size="sm" className="group">
                               Read More
                               <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
@@ -370,17 +267,16 @@ export default function BlogPage() {
                     <Card key={post.id} className="group cursor-pointer hover:shadow-lg transition-shadow">
                       <Link href={`/blog/${post.slug}`}>
                         <div className="relative h-48 overflow-hidden rounded-t-xl">
-                          {post.coverImage ? (
+                          {post.coverImage && !failedImages.has(post.id) ? (
                             <Image
                               src={post.coverImage}
                               alt={post.title}
                               fill
                               className="object-cover group-hover:scale-105 transition-transform duration-300"
                               unoptimized={post.coverImage.includes('cloudinary.com')}
-                              onError={(e) => {
-                                console.error('Failed to load blog cover image:', post.coverImage)
-                                const target = e.currentTarget as HTMLImageElement
-                                target.style.display = 'none'
+                              onError={() => {
+                                // Silently handle error and show fallback
+                                setFailedImages(prev => new Set(prev).add(post.id))
                               }}
                             />
                           ) : (
@@ -410,19 +306,7 @@ export default function BlogPage() {
                         </CardHeader>
                         
                         <CardContent>
-                          <div className="flex items-center justify-between">
-                            <div className="flex flex-wrap gap-1">
-                              {post.tags.slice(0, 2).map((tag) => (
-                                <Badge key={tag} variant="outline" className="text-xs capitalize">
-                                  {tag}
-                                </Badge>
-                              ))}
-                              {post.tags.length > 2 && (
-                                <Badge variant="outline" className="text-xs">
-                                  +{post.tags.length - 2}
-                                </Badge>
-                              )}
-                            </div>
+                          <div className="flex items-center justify-end">
                             <Button variant="ghost" size="sm" className="group">
                               Read
                               <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
@@ -443,15 +327,6 @@ export default function BlogPage() {
                 <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
                   No articles found
                 </h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-6">
-                  Try adjusting your search or explore different tags.
-                </p>
-                <Button onClick={() => {
-                  setSearchQuery("")
-                  setSelectedTag("")
-                }}>
-                  Clear Filters
-                </Button>
               </div>
             )}
 

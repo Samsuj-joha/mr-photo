@@ -8,9 +8,12 @@ import { deleteImage } from "@/lib/cloudinary"
 // PUT - Update slider image
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Await params in Next.js 15
+    const { id } = await params
+    
     const session = await getServerSession(authOptions)
     
     if (!session || session.user.role !== "ADMIN") {
@@ -24,7 +27,7 @@ export async function PUT(
     const { title, description, alt, order, active, linkUrl, linkText } = body
 
     const sliderImage = await db.homeSlider.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         title: title || "",
         description: description || "",
@@ -50,9 +53,12 @@ export async function PUT(
 // DELETE - Delete slider image
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Await params in Next.js 15
+    const { id } = await params
+    
     const session = await getServerSession(authOptions)
     
     if (!session || session.user.role !== "ADMIN") {
@@ -64,7 +70,7 @@ export async function DELETE(
 
     // Find the slider image first
     const sliderImage = await db.homeSlider.findUnique({
-      where: { id: params.id }
+      where: { id }
     })
 
     if (!sliderImage) {
@@ -83,7 +89,7 @@ export async function DELETE(
 
     // Delete from database
     await db.homeSlider.delete({
-      where: { id: params.id }
+      where: { id }
     })
 
     return NextResponse.json({ message: "Slider image deleted successfully" })

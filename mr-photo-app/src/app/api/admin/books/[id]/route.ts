@@ -7,9 +7,12 @@ import { db } from "@/lib/db"
 // GET - Fetch single book
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Await params in Next.js 15
+    const { id } = await params
+    
     const session = await getServerSession(authOptions)
     
     if (!session || session.user.role !== "ADMIN") {
@@ -17,7 +20,7 @@ export async function GET(
     }
 
     const book = await db.book.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { tags: true }
     })
 
@@ -38,10 +41,13 @@ export async function GET(
 // PUT - Update book
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log("🔄 Updating book with ID:", params.id)
+    // Await params in Next.js 15
+    const { id } = await params
+    
+    console.log("🔄 Updating book with ID:", id)
     
     const session = await getServerSession(authOptions)
     
@@ -64,12 +70,12 @@ export async function PUT(
 
     // Check if book exists first
     const existingBook = await db.book.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { tags: true }
     })
 
     if (!existingBook) {
-      console.log("❌ Book not found:", params.id)
+      console.log("❌ Book not found:", id)
       return NextResponse.json({ error: "Book not found" }, { status: 404 })
     }
 
@@ -87,7 +93,7 @@ export async function PUT(
     const slugExists = await db.book.findFirst({
       where: { 
         slug: slug,
-        NOT: { id: params.id }
+        NOT: { id }
       }
     })
 
@@ -123,7 +129,7 @@ export async function PUT(
 
     // Update the book
     const book = await db.book.update({
-      where: { id: params.id },
+      where: { id },
       data: updateData
     })
 
@@ -132,7 +138,7 @@ export async function PUT(
     // Delete existing tags
     console.log("🏷️ Deleting existing tags...")
     await db.bookTag.deleteMany({
-      where: { bookId: params.id }
+      where: { bookId: id }
     })
 
     // Add new tags
@@ -206,10 +212,13 @@ export async function PUT(
 // DELETE - Delete book
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log("🗑️ Deleting book with ID:", params.id)
+    // Await params in Next.js 15
+    const { id } = await params
+    
+    console.log("🗑️ Deleting book with ID:", id)
     
     const session = await getServerSession(authOptions)
     
@@ -219,7 +228,7 @@ export async function DELETE(
 
     // Get the book first to access file publicIds for cleanup
     const book = await db.book.findUnique({
-      where: { id: params.id }
+      where: { id }
     })
 
     if (!book) {
@@ -263,7 +272,7 @@ export async function DELETE(
 
     // Delete the book (tags will be deleted automatically due to cascade)
     await db.book.delete({
-      where: { id: params.id }
+      where: { id }
     })
 
     console.log("✅ Book deleted successfully")

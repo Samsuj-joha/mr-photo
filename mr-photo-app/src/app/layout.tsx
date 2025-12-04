@@ -10,6 +10,7 @@ import { ConditionalLayout } from '@/components/layout/ConditionalLayout'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://mr-photography.com'),
   title: 'MR-PHOTOGRAPHY - Professional Photography Portfolio',
   description: 'Capturing life\'s precious moments through professional photography. Wedding, portrait, and event photography services.',
   keywords: 'photography, wedding photography, portrait photography, professional photographer, New York photographer',

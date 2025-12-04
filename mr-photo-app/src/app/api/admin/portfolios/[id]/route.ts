@@ -186,10 +186,11 @@ import { db } from '@/lib/db'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = params.id
+    // Await params in Next.js 15
+    const { id } = await params
     
     const portfolio = await db.portfolio.findUnique({
       where: { id }
@@ -225,9 +226,12 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Await params in Next.js 15
+    const { id } = await params
+    
     // Check authentication
     const session = await getServerSession(authOptions)
     if (!session || session.user.role !== "ADMIN") {
@@ -236,8 +240,6 @@ export async function PATCH(
         { status: 401 }
       )
     }
-
-    const id = params.id
     const updates = await request.json()
     
     // Transform gallery back to category if needed
@@ -286,11 +288,14 @@ export async function PATCH(
 // DELETE - Enhanced with proper Cloudinary cleanup
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   console.log("🗑️ Portfolio delete API called")
   
   try {
+    // Await params in Next.js 15
+    const { id } = await params
+    
     // Check authentication
     const session = await getServerSession(authOptions)
     if (!session || session.user.role !== "ADMIN") {
@@ -299,8 +304,6 @@ export async function DELETE(
         { status: 401 }
       )
     }
-
-    const id = params.id
     
     // First, get the portfolio to get the Cloudinary URL
     const portfolio = await db.portfolio.findUnique({

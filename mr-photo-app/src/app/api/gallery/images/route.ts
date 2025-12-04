@@ -11,8 +11,6 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "15")
     const offset = parseInt(searchParams.get("offset") || "0")
 
-    console.log("🖼️ Fetching images with filters:", { category, country, year, limit, offset })
-
     // Build where clause for filtering galleries
     const galleryWhere: any = {
       published: true
@@ -118,8 +116,6 @@ export async function GET(request: NextRequest) {
     } catch (error: any) {
       // If year or category columns don't exist (P2022), remove filters and use base fields
       if (error?.code === 'P2022' || error?.message?.includes('Unknown column') || error?.message?.includes('column') || error?.message?.includes('field')) {
-        console.log("⚠️ Year/category columns may not exist, using base fields and filtering in memory")
-        
         // Remove year and category from where clause
         const fallbackWhere = { ...imageWhereBase }
         
@@ -155,8 +151,6 @@ export async function GET(request: NextRequest) {
         throw error
       }
     }
-
-    console.log(`✅ Found ${images.length} images (${totalCount} total)`)
 
     const formattedImages = images.map(image => {
       // Safely get year and category, with fallbacks

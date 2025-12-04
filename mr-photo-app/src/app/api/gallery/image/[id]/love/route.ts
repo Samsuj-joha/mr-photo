@@ -5,14 +5,17 @@ import { db } from "@/lib/db"
 // POST - Increment love count
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log(`❤️ Adding love to image: ${params.id}`)
+    // Await params in Next.js 15
+    const { id } = await params
+    
+    console.log(`❤️ Adding love to image: ${id}`)
     
     // Find the image and increment love count
     const image = await db.galleryImage.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         loves: {
           increment: 1
@@ -42,11 +45,14 @@ export async function POST(
 // GET - Get current love count
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Await params in Next.js 15
+    const { id } = await params
+    
     const image = await db.galleryImage.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: { id: true, loves: true }
     })
 

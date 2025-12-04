@@ -8,9 +8,12 @@ import { db } from "@/lib/db"
 // GET single contact
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Await params in Next.js 15
+    const { id } = await params
+    
     const session = await getServerSession(authOptions)
     
     if (!session || session.user.role !== "ADMIN") {
@@ -21,7 +24,7 @@ export async function GET(
     }
 
     const contact = await db.contact.findUnique({
-      where: { id: params.id }
+      where: { id }
     })
 
     if (!contact) {
@@ -45,9 +48,12 @@ export async function GET(
 // PATCH update contact status
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Await params in Next.js 15
+    const { id } = await params
+    
     const session = await getServerSession(authOptions)
     
     if (!session || session.user.role !== "ADMIN") {
@@ -70,7 +76,7 @@ export async function PATCH(
     }
 
     const contact = await db.contact.findUnique({
-      where: { id: params.id }
+      where: { id }
     })
 
     if (!contact) {
@@ -81,7 +87,7 @@ export async function PATCH(
     }
 
     const updatedContact = await db.contact.update({
-      where: { id: params.id },
+      where: { id },
       data: { status }
     })
 
@@ -99,9 +105,12 @@ export async function PATCH(
 // DELETE single contact
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Await params in Next.js 15
+    const { id } = await params
+    
     const session = await getServerSession(authOptions)
     
     if (!session || session.user.role !== "ADMIN") {
@@ -112,7 +121,7 @@ export async function DELETE(
     }
 
     const contact = await db.contact.findUnique({
-      where: { id: params.id }
+      where: { id }
     })
 
     if (!contact) {
@@ -123,7 +132,7 @@ export async function DELETE(
     }
 
     await db.contact.delete({
-      where: { id: params.id }
+      where: { id }
     })
 
     return NextResponse.json({ 

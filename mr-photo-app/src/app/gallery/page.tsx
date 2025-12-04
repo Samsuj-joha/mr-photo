@@ -120,8 +120,8 @@ export default function GalleryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen">
+      <div className="container mx-auto py-8">
         {/* Filter by Category Section */}
         <div className="mb-8">
           <h2 className="text-2xl font-bold mb-4">Filter by Category</h2>
@@ -171,7 +171,7 @@ export default function GalleryPage() {
             {filteredImages.map((image, index) => (
               <div
                 key={image.id}
-                className="break-inside-avoid rounded-lg overflow-hidden bg-white shadow-sm hover:shadow-md cursor-pointer transition-all"
+                className="group break-inside-avoid rounded-lg overflow-hidden cursor-pointer transition-all"
                 onClick={() => handleImageClick(index)}
               >
                 <div className="relative overflow-hidden bg-gray-100 aspect-auto">
@@ -180,12 +180,9 @@ export default function GalleryPage() {
                     alt={image.title}
                     width={400}
                     height={300}
-                    className="w-full h-auto object-cover hover:scale-105 transition-transform duration-300"
+                    className="w-full h-auto object-cover group-hover:scale-105 transition-transform duration-300"
                     unoptimized={image.imageUrl.includes('cloudinary.com')}
                   />
-                  <div className="absolute inset-0 bg-black/60 opacity-0 hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
-                    <h3 className="text-white font-semibold text-sm line-clamp-2">{image.title}</h3>
-                  </div>
                 </div>
               </div>
             ))}

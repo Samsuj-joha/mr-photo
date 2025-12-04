@@ -7,10 +7,11 @@ import { db } from '@/lib/db'
 // GET - Fetch single portfolio project by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = params.id
+    // Await params in Next.js 15
+    const { id } = await params
 
     const portfolio = await db.portfolio.findUnique({
       where: { 

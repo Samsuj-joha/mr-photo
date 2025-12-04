@@ -4,11 +4,8 @@ import { db } from "@/lib/db"
 
 export async function GET() {
   try {
-    console.log("🌍 Fetching countries from database...")
-    
     // First, let's check if we have any galleries at all
     const totalGalleries = await db.gallery.count()
-    console.log(`📊 Total galleries in database: ${totalGalleries}`)
     
     // Get unique countries from published galleries
     const countries = await db.gallery.groupBy({
@@ -25,11 +22,8 @@ export async function GET() {
       }
     })
 
-    console.log(`✅ Found ${countries.length} unique countries:`, countries)
-
     // If no countries found, let's check unpublished galleries too
     if (countries.length === 0) {
-      console.log("🔍 No published countries found, checking all galleries...")
       const allCountries = await db.gallery.groupBy({
         by: ['country'],
         where: {
@@ -42,7 +36,6 @@ export async function GET() {
           country: true
         }
       })
-      console.log(`📋 All countries (including unpublished):`, allCountries)
     }
 
     const formattedCountries = countries.map(country => ({
@@ -50,8 +43,6 @@ export async function GET() {
       label: country.country!.charAt(0).toUpperCase() + country.country!.slice(1),
       count: country._count.country
     }))
-
-    console.log(`🎯 Returning formatted countries:`, formattedCountries)
 
     return NextResponse.json({ 
       countries: formattedCountries,
