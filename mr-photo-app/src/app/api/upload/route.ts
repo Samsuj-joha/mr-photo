@@ -898,6 +898,7 @@ export async function POST(request: NextRequest) {
           galleryId: galleryId,
           year: uploadYear,
           category: detectedCategory,
+          published: false, // Images start as draft, must be published to appear on gallery
         }
         
         try {

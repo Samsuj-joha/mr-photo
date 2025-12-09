@@ -30,6 +30,8 @@ import {
   Tag,
   X,
   RefreshCw,
+  CheckCircle,
+  Circle,
 } from "lucide-react"
 import Image from "next/image"
 import { toast } from "sonner"
@@ -43,6 +45,7 @@ interface GalleryImage {
   order: number
   year?: number
   category?: string
+  published?: boolean // Image publish status (draft by default)
   createdAt: string
   galleryId: string
   gallery?: {
@@ -282,8 +285,8 @@ export default function GalleryManagePage() {
       
       const matchesStatus = 
         filterStatus === "all" ||
-        (filterStatus === "published" && img.gallery?.published) ||
-        (filterStatus === "draft" && !img.gallery?.published)
+        (filterStatus === "published" && img.published === true) ||
+        (filterStatus === "draft" && img.published !== true)
       
       const matchesCategory = 
         filterCategory === "all" ||
@@ -374,13 +377,32 @@ export default function GalleryManagePage() {
   // Toggle publish status
   const togglePublish = async (image: GalleryImage) => {
     try {
-      // This would require updating the gallery's published status
-      // For now, we'll just show a message
-      toast.info('Publish/unpublish functionality requires gallery update API')
-      await fetchImages()
+      const newPublishedStatus = !image.published
+      const response = await fetch(`/api/gallery/images/${image.id}/publish`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ published: newPublishedStatus })
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to update publish status')
+      }
+
+      // Update local state
+      setImages(prev => prev.map(img => 
+        img.id === image.id ? { ...img, published: newPublishedStatus } : img
+      ))
+
+      // Update selected image if it's the one being toggled
+      if (selectedImage?.id === image.id) {
+        setSelectedImage({ ...selectedImage, published: newPublishedStatus })
+      }
+
+      toast.success(newPublishedStatus ? 'Image published successfully!' : 'Image unpublished (draft)')
     } catch (error) {
       console.error('Error toggling publish:', error)
-      toast.error('Failed to update publish status')
+      toast.error(error instanceof Error ? error.message : 'Failed to update publish status')
     }
   }
 
@@ -689,7 +711,7 @@ export default function GalleryManagePage() {
                       })}
                     </td>
                     <td className="p-4 w-24">
-                      {img.gallery?.published ? (
+                      {img.published ? (
                         <Badge className="bg-green-600 text-white">Published</Badge>
                       ) : (
                         <Badge variant="secondary">Draft</Badge>
@@ -704,21 +726,23 @@ export default function GalleryManagePage() {
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
-                        {img.gallery?.published ? (
+                        {img.published ? (
                           <Button
                             size="icon"
                             variant="ghost"
                             onClick={() => togglePublish(img)}
+                            title="Unpublish"
                           >
-                            <XCircle className="h-4 w-4 text-green-600" />
+                            <XCircle className="h-4 w-4 text-orange-600" />
                           </Button>
                         ) : (
                           <Button
                             size="icon"
                             variant="ghost"
                             onClick={() => togglePublish(img)}
+                            title="Publish"
                           >
-                            <XCircle className="h-4 w-4" />
+                            <CheckCircle className="h-4 w-4 text-green-600" />
                           </Button>
                         )}
                         <Button
@@ -749,8 +773,8 @@ export default function GalleryManagePage() {
 
       {/* Image Detail Modal */}
       <Dialog open={!!selectedImage} onOpenChange={(open) => !open && setSelectedImage(null)}>
-        <DialogContent className="max-w-7xl w-[95vw] max-h-[95vh] overflow-hidden flex flex-col p-0 gap-0">
-          <DialogHeader className="px-6 pt-6 pb-4 border-b">
+        <DialogContent className="!max-w-none !w-[calc(100vw-100px)] !max-h-[calc(100vh-100px)] overflow-hidden flex flex-col p-0 gap-0 rounded-none !left-[50px] !top-[50px] !right-[50px] !bottom-[50px] !translate-x-0 !translate-y-0">
+          <DialogHeader className="px-3 pt-3 pb-2 border-b">
             <DialogTitle className="text-xl font-bold">
               {selectedImage?.alt || selectedImage?.caption || selectedImage?.gallery?.title || "Image Details"}
             </DialogTitle>
@@ -758,7 +782,7 @@ export default function GalleryManagePage() {
           {selectedImage && (
             <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
               {/* Image Section */}
-              <div className="w-full lg:w-[55%] flex flex-col bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-6">
+              <div className="w-full lg:w-[55%] flex flex-col bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-3">
                 <div className="relative bg-black/5 dark:bg-black/20 flex items-center justify-center rounded-xl overflow-hidden shadow-2xl border border-gray-200 dark:border-gray-700" style={{ minHeight: '500px', maxHeight: 'calc(95vh - 200px)' }}>
                   <Image
                     src={selectedImage.url}
@@ -772,12 +796,12 @@ export default function GalleryManagePage() {
               </div>
 
               {/* Details Section */}
-              <div className="w-full lg:w-[45%] overflow-y-auto flex flex-col bg-white dark:bg-gray-950 p-6 space-y-6">
+              <div className="w-full lg:w-[45%] overflow-y-auto flex flex-col bg-white dark:bg-gray-950 p-3 space-y-4 pb-4">
                 {/* Status */}
                 <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
                   <div className="flex items-center gap-3">
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Status:</span>
-                    {selectedImage.gallery?.published ? (
+                    {selectedImage.published ? (
                       <Badge className="bg-green-600 text-white px-3 py-1">Published</Badge>
                     ) : (
                       <Badge variant="secondary" className="px-3 py-1">Draft</Badge>
@@ -925,7 +949,7 @@ export default function GalleryManagePage() {
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-800">
+                <div className="flex gap-2 pt-4 pb-2 border-t border-gray-200 dark:border-gray-800 mt-auto">
                   <Button
                     variant="outline"
                     className="flex-1 h-11 font-medium"
@@ -936,16 +960,23 @@ export default function GalleryManagePage() {
                   >
                     Edit
                   </Button>
-                  {selectedImage.gallery?.published && (
-                    <Button
-                      variant="outline"
-                      className="flex-1 h-11 font-medium"
-                      onClick={() => togglePublish(selectedImage)}
-                    >
-                      <XCircle className="h-4 w-4 mr-2" />
-                      Unpublish
-                    </Button>
-                  )}
+                  <Button
+                    variant={selectedImage.published ? "outline" : "default"}
+                    className={`flex-1 h-11 font-medium ${selectedImage.published ? "" : "bg-green-600 hover:bg-green-700 text-white"}`}
+                    onClick={() => togglePublish(selectedImage)}
+                  >
+                    {selectedImage.published ? (
+                      <>
+                        <XCircle className="h-4 w-4 mr-2" />
+                        Unpublish
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Publish
+                      </>
+                    )}
+                  </Button>
                   <Button
                     variant="destructive"
                     className="flex-1 h-11 font-medium"

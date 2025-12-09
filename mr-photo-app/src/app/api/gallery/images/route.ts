@@ -22,7 +22,8 @@ export async function GET(request: NextRequest) {
 
     // Build where clause for images (year and category filters)
     const imageWhere: any = {
-      gallery: galleryWhere
+      gallery: galleryWhere,
+      published: true // Only show published images on the public gallery
     }
 
     if (year && year !== "all") {
@@ -39,7 +40,8 @@ export async function GET(request: NextRequest) {
     
     // Base where clause without year/category filters (for fallback)
     const imageWhereBase: any = {
-      gallery: galleryWhere
+      gallery: galleryWhere,
+      published: true // Only show published images on the public gallery
     }
     
     // Base select fields (without year/category that might not exist)
@@ -170,6 +172,7 @@ export async function GET(request: NextRequest) {
         country: image.gallery.country || "unknown",
         loves: image.loves || 0,
         year: imageYear,
+        createdAt: image.createdAt.toISOString(),
         galleryId: image.gallery.id,
         galleryTitle: image.gallery.title
       }

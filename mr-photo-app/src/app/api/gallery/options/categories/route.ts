@@ -12,6 +12,7 @@ export async function GET() {
           not: null,
           not: "" // Exclude empty strings
         },
+        published: true, // Only count published images
         gallery: {
           published: true // Only from published galleries
         }
@@ -67,6 +68,7 @@ export async function GET() {
     // Get all published images first
     const allImages = await db.galleryImage.findMany({
       where: {
+        published: true, // Only count published images
         gallery: { published: true }
       },
       select: {

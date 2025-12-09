@@ -78,6 +78,7 @@ model GalleryImage {
   loves     Int      @default(0) // Loves field for heart icon counting
   year      Int? // Auto-extracted year from upload date for filtering
   category  String? // Auto-detected category: Birds, Animal, Ocean, Nature, Peace in Mind, Others
+  published Boolean  @default(false) // Draft status by default, must be published to appear on gallery
   galleryId String
   gallery   Gallery  @relation(fields: [galleryId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
@@ -227,13 +228,13 @@ model Feature {
 
 // 🆕 SETTINGS MODEL - For storing API keys and configuration
 model Settings {
-  id                String   @id @default(cuid())
-  key               String   @unique // Setting key (e.g., "image_analysis_provider", "clarifai_api_key")
-  value             String?  @db.Text // Setting value (encrypted or plain text)
-  description       String? // Description of what this setting does
-  category          String? // Category like "api", "general", etc.
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id          String   @id @default(cuid())
+  key         String   @unique // Setting key (e.g., "image_analysis_provider", "clarifai_api_key")
+  value       String?  @db.Text // Setting value (encrypted or plain text)
+  description String? // Description of what this setting does
+  category    String? // Category like "api", "general", etc.
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([key])
   @@index([category])
