@@ -293,7 +293,14 @@ async function analyzeWithAzure(buffer: Buffer, apiKeyConfig: string, customCate
     const [endpoint, key] = apiKeyConfig.split("|")
     if (!endpoint || !key) throw new Error("Invalid Azure format. Use: endpoint|key")
 
-    const response = await fetch(`${endpoint}/vision/v3.2/analyze?visualFeatures=Objects,Tags,Description`, {
+    // Clean endpoint URL (remove trailing slash and any existing path)
+    const cleanEndpoint = endpoint.replace(/\/$/, "").replace(/\/vision\/.*$/, "")
+    
+    // Use the latest stable API version (v3.2 is still supported and widely used)
+    // Alternative: v4.0 is available but requires different endpoint structure
+    const apiUrl = `${cleanEndpoint}/vision/v3.2/analyze?visualFeatures=Objects,Tags,Description,Categories`
+    
+    const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Ocp-Apim-Subscription-Key": key,
@@ -302,28 +309,65 @@ async function analyzeWithAzure(buffer: Buffer, apiKeyConfig: string, customCate
       body: buffer,
     })
 
-    if (!response.ok) throw new Error(`Azure error: ${response.statusText}`)
+    if (!response.ok) {
+      const errorText = await response.text()
+      let errorMessage = `Azure Vision API error: ${response.status} ${response.statusText}`
+      
+      // Provide helpful error messages
+      if (response.status === 401) {
+        errorMessage = "Azure API authentication failed. Please check your API key."
+      } else if (response.status === 429) {
+        errorMessage = "Azure API rate limit exceeded. Please wait a moment and try again."
+      } else if (response.status === 400) {
+        errorMessage = `Azure API request error: ${errorText || "Invalid request format"}`
+      }
+      
+      throw new Error(errorMessage)
+    }
 
     const result = await response.json()
-    const tags = result.tags?.map((t: any) => ({ label: t.name, confidence: t.confidence })) || []
-    const description = result.description?.captions?.[0]?.text || "Image analyzed"
+    
+    // Extract tags (labels)
+    const tags = result.tags?.map((t: any) => ({ 
+      label: t.name, 
+      confidence: t.confidence || 0.8 
+    })) || []
+    
+    // Extract description
+    const description = result.description?.captions?.[0]?.text || 
+                       result.description?.tags?.join(", ") || 
+                       "Image analyzed"
+    
+    // Extract objects
     const objects = result.objects?.map((o: any) => o.object) || []
-
-    const labelTexts = tags.map((t) => t.label)
+    
+    // Extract categories (if available)
+    const categories = result.categories?.map((c: any) => c.name) || []
+    
+    // Combine tags, objects, and categories for better categorization
+    const allLabels = [
+      ...tags.map(t => t.label),
+      ...objects,
+      ...categories
+    ]
+    
+    const labelTexts = allLabels.length > 0 ? allLabels : tags.map((t) => t.label)
     const topCategories = suggestMultipleCategories(labelTexts, customCategories, 5)
+    
     return {
-      labels: tags,
+      labels: tags.length > 0 ? tags : [{ label: description, confidence: 0.8 }],
       description,
       suggestedCategory: topCategories[0] || "Other",
       suggestedCategories: topCategories, // Multiple categories (up to 5)
       suggestedCategoryMatches: scoreCategories(labelTexts, customCategories),
       extractedText: "",
       colors: [],
-      objects,
+      objects: objects.length > 0 ? objects : labelTexts.slice(0, 5),
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Azure Vision API error:", error)
-    throw error
+    // Re-throw with more context
+    throw new Error(`Azure Vision analysis failed: ${error.message || error}`)
   }
 }
 

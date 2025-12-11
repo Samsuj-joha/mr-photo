@@ -8,11 +8,13 @@ import {
   Upload, 
   X, 
   Camera,
-  Loader2
+  Loader2,
+  Edit
 } from "lucide-react"
 import Image from "next/image"
 import { useDropzone } from "react-dropzone"
 import { toast } from "sonner"
+import { ImageEditModal } from "@/components/admin/gallery/ImageEditModal"
 
 interface UploadingImage {
   id: string
@@ -22,12 +24,22 @@ interface UploadingImage {
   fileSize: string
   status: 'analyzing' | 'uploading' | 'completed' | 'error'
   error?: string
+  imageId?: string // Database image ID after upload
+  imageUrl?: string // Uploaded image URL
+  category?: string // Detected/saved category
 }
 
 export default function AdminImageUpload() {
   const router = useRouter()
   const [uploadingImages, setUploadingImages] = useState<UploadingImage[]>([])
   const [isUploading, setIsUploading] = useState(false)
+  const [editingImageId, setEditingImageId] = useState<string | null>(null)
+  const [editingImageData, setEditingImageData] = useState<{
+    imageId: string
+    imageUrl: string
+    imageTitle?: string
+    categories?: string
+  } | null>(null)
 
   // Format file size
   const formatFileSize = (bytes: number) => {
@@ -109,10 +121,19 @@ export default function AdminImageUpload() {
       })
 
       if (uploadResponse.ok) {
-        // Mark as completed
+        const uploadData = await uploadResponse.json()
+        // Mark as completed and store image data
         setUploadingImages(prev =>
           prev.map(img =>
-            img.id === image.id ? { ...img, status: 'completed' } : img
+            img.id === image.id 
+              ? { 
+                  ...img, 
+                  status: 'completed',
+                  imageId: uploadData.id,
+                  imageUrl: uploadData.url,
+                  category: uploadData.category
+                } 
+              : img
           )
         )
         toast.success(`${image.fileName} uploaded successfully`)
@@ -295,7 +316,7 @@ export default function AdminImageUpload() {
                 </div>
 
                 {/* File Info */}
-                <div className="p-4 space-y-1 border-t border-gray-200 dark:border-gray-700">
+                <div className="p-4 space-y-2 border-t border-gray-200 dark:border-gray-700">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium text-gray-900 dark:text-white truncate flex-1">
                       {image.fileName}
@@ -308,6 +329,27 @@ export default function AdminImageUpload() {
                     <p className="text-xs text-red-500 truncate mt-1">
                       {image.error}
                     </p>
+                  )}
+                  {image.status === 'completed' && image.imageId && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full mt-2"
+                      onClick={() => {
+                        if (image.imageId && image.imageUrl) {
+                          setEditingImageData({
+                            imageId: image.imageId,
+                            imageUrl: image.imageUrl,
+                            imageTitle: image.fileName,
+                            categories: image.category
+                          })
+                          setEditingImageId(image.imageId)
+                        }
+                      }}
+                    >
+                      <Edit className="h-4 w-4 mr-2" />
+                      Edit
+                    </Button>
                   )}
                 </div>
               </div>
@@ -324,6 +366,21 @@ export default function AdminImageUpload() {
             No files selected. Drag and drop or click to upload photos.
           </p>
         </div>
+      )}
+
+      {/* Edit Modal */}
+      {editingImageData && (
+        <ImageEditModal
+          imageId={editingImageData.imageId}
+          imageUrl={editingImageData.imageUrl}
+          imageTitle={editingImageData.imageTitle}
+          categories={editingImageData.categories}
+          isOpen={editingImageId === editingImageData.imageId}
+          onClose={() => {
+            setEditingImageId(null)
+            setEditingImageData(null)
+          }}
+        />
       )}
     </div>
   )

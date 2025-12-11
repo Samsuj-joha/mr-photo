@@ -530,6 +530,16 @@ export default function GalleryApiSettings() {
                       https://portal.azure.com
                       <ExternalLink className="inline h-3 w-3 ml-1" />
                     </a>
+                    {" "}•{" "}
+                    <a
+                      href="/AZURE_VISION_SETUP_GUIDE.md"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-pink-600 hover:text-pink-700 dark:text-pink-400 dark:hover:text-pink-300 underline"
+                    >
+                      View Setup Guide
+                      <ExternalLink className="inline h-3 w-3 ml-1" />
+                    </a>
                   </CardDescription>
                 </div>
                 {providers.azure.active && (
@@ -541,8 +551,27 @@ export default function GalleryApiSettings() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Setup Instructions */}
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <h4 className="font-semibold text-sm mb-2 text-blue-900 dark:text-blue-100">
+                  Quick Setup Steps:
+                </h4>
+                <ol className="text-sm text-blue-800 dark:text-blue-200 space-y-1 list-decimal list-inside">
+                  <li>Go to <a href="https://portal.azure.com" target="_blank" rel="noopener noreferrer" className="underline">Azure Portal</a></li>
+                  <li>Create a "Computer Vision" resource</li>
+                  <li>Copy the Endpoint and KEY 1 from "Keys and Endpoint" section</li>
+                  <li>Paste them below and click "Activate This Provider"</li>
+                </ol>
+                <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
+                  💡 Free tier available: 5,000 calls/month at no cost!
+                </p>
+              </div>
+
               <div className="space-y-2">
-                <Label htmlFor="azure-endpoint">Endpoint</Label>
+                <Label htmlFor="azure-endpoint">
+                  Endpoint URL
+                  <span className="text-red-500 ml-1">*</span>
+                </Label>
                 <Input
                   id="azure-endpoint"
                   placeholder="https://your-name.cognitiveservices.azure.com"
@@ -554,15 +583,21 @@ export default function GalleryApiSettings() {
                     }))
                   }
                 />
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Found in Azure Portal → Your Computer Vision resource → Keys and Endpoint
+                </p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="azure-api-key">Enter API Key</Label>
+                <Label htmlFor="azure-api-key">
+                  API Key (KEY 1)
+                  <span className="text-red-500 ml-1">*</span>
+                </Label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Input
                       id="azure-api-key"
                       type={showApiKey ? "text" : "password"}
-                      placeholder="Enter Azure API Key"
+                      placeholder="Enter Azure API Key (KEY 1)"
                       value={providers.azure.apiKey}
                       onChange={(e) =>
                         setProviders(prev => ({
@@ -584,6 +619,9 @@ export default function GalleryApiSettings() {
                     )}
                   </div>
                 </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Copy KEY 1 from Azure Portal → Keys and Endpoint section
+                </p>
               </div>
 
               <div className="flex gap-2">

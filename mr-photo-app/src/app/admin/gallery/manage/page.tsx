@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -32,6 +32,8 @@ import {
   RefreshCw,
   CheckCircle,
   Circle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import Image from "next/image"
 import { toast } from "sonner"
@@ -57,7 +59,7 @@ interface GalleryImage {
   }
 }
 
-// Category color mapping
+// Category color mapping - 20 categories
 const categoryColors: Record<string, string> = {
   Nature: "bg-green-500",
   Travel: "bg-blue-500",
@@ -71,6 +73,20 @@ const categoryColors: Record<string, string> = {
   Macro: "bg-teal-500",
   Events: "bg-rose-500",
   Other: "bg-gray-400",
+  Birds: "bg-cyan-500",
+  Ocean: "bg-blue-600",
+  Animal: "bg-amber-500",
+  Landscape: "bg-emerald-600",
+  Street: "bg-slate-600",
+  Fashion: "bg-fuchsia-500",
+  Wedding: "bg-pink-600",
+  Concert: "bg-violet-600",
+}
+
+// Helper function to capitalize first letter of category names
+const capitalizeCategory = (category: string): string => {
+  if (!category) return category
+  return category.charAt(0).toUpperCase() + category.slice(1).toLowerCase()
 }
 
 export default function GalleryManagePage() {
@@ -90,6 +106,12 @@ export default function GalleryManagePage() {
   const [apiStatus, setApiStatus] = useState<{ configured: boolean; provider: string } | null>(null)
   const [editingCategory, setEditingCategory] = useState<string | null>(null)
   const [editCategoryValue, setEditCategoryValue] = useState("")
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [isEditView, setIsEditView] = useState(false)
+  const [allAvailableCategories, setAllAvailableCategories] = useState<string[]>([])
+  const [aiLabels, setAiLabels] = useState<{ label: string; confidence: number }[]>([])
+  const [loadingLabels, setLoadingLabels] = useState(false)
+  const imageRef = useRef<HTMLDivElement>(null)
 
   // Fetch all images from all galleries
   const fetchImages = async () => {
@@ -149,6 +171,66 @@ export default function GalleryManagePage() {
       }
     } catch (error) {
       console.error('Error fetching categories:', error)
+    }
+  }
+
+  // Fetch AI labels for selected image
+  const fetchAiLabels = async (imageId: string) => {
+    if (!imageId) return
+    setLoadingLabels(true)
+    try {
+      const response = await fetch(`/api/gallery/image/${imageId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setAiLabels(data.aiLabels || [])
+      }
+    } catch (error) {
+      console.error('Error fetching AI labels:', error)
+      setAiLabels([])
+    } finally {
+      setLoadingLabels(false)
+    }
+  }
+
+
+  // Fetch all available categories for the Label view
+  const fetchAllAvailableCategories = async () => {
+    try {
+      const response = await fetch('/api/gallery/options/categories')
+      if (response.ok) {
+        const data = await response.json()
+        const categories = data.categories || []
+        // Extract category names and add default ones if needed
+        const categoryNames = categories.map((cat: any) => cat.value || cat.label || cat)
+        // Add default 20 categories if not all present
+        const defaultCategories = [
+          "Nature", "Travel", "Portrait", "Sports", "Urban", 
+          "Wildlife", "Food", "Architecture", "Abstract", "Macro",
+          "Events", "Birds", "Ocean", "Animal", "Landscape",
+          "Street", "Fashion", "Wedding", "Concert", "Other"
+        ]
+        const combined = [...new Set([...defaultCategories, ...categoryNames])]
+        setAllAvailableCategories(combined.slice(0, 20))
+      } else {
+        // Fallback to default categories
+        const defaultCategories = [
+          "Nature", "Travel", "Portrait", "Sports", "Urban", 
+          "Wildlife", "Food", "Architecture", "Abstract", "Macro",
+          "Events", "Birds", "Ocean", "Animal", "Landscape",
+          "Street", "Fashion", "Wedding", "Concert", "Other"
+        ]
+        setAllAvailableCategories(defaultCategories)
+      }
+    } catch (error) {
+      console.error('Error fetching available categories:', error)
+      // Fallback to default categories
+      const defaultCategories = [
+        "Nature", "Travel", "Portrait", "Sports", "Urban", 
+        "Wildlife", "Food", "Architecture", "Abstract", "Macro",
+        "Events", "Birds", "Ocean", "Animal", "Landscape",
+        "Street", "Fashion", "Wedding", "Concert", "Other"
+      ]
+      setAllAvailableCategories(defaultCategories)
     }
   }
 
@@ -223,6 +305,77 @@ export default function GalleryManagePage() {
     }
   }
 
+  // Toggle category - add if not present, remove if present
+  const toggleCategory = async (category: string) => {
+    if (!selectedImage) return
+
+    const currentCategories = (selectedImage.category || "")
+      .split(",")
+      .map(c => c.trim())
+      .filter(c => c.length > 0)
+    
+    const trimmedCategory = category.trim()
+    const isAssigned = currentCategories.includes(trimmedCategory)
+    
+    let newCategories: string[]
+    if (isAssigned) {
+      // Remove category
+      newCategories = currentCategories.filter(c => c !== trimmedCategory)
+    } else {
+      // Add category
+      newCategories = [...currentCategories, trimmedCategory]
+    }
+
+    const categoryString = newCategories.join(", ")
+    
+    try {
+      const response = await fetch('/api/admin/images/update-category', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageId: selectedImage.id, category: categoryString })
+      })
+
+      const data = await response.json()
+      if (response.ok && data.success) {
+        // Update local state immediately for better UX
+        setSelectedImage({
+          ...selectedImage,
+          category: categoryString
+        })
+        
+        toast.success(isAssigned ? `Removed "${trimmedCategory}" category` : `Added "${trimmedCategory}" category`)
+        
+        // Refresh images list
+        await fetchImages()
+        await fetchCategories()
+        
+        // Scroll to image and highlight
+        if (imageRef.current) {
+          imageRef.current.scrollIntoView({ 
+            behavior: "smooth", 
+            block: "center" 
+          })
+          
+          imageRef.current.style.transition = "box-shadow 0.3s ease"
+          imageRef.current.style.boxShadow = isAssigned 
+            ? "0 0 30px rgba(239, 68, 68, 0.6)" 
+            : "0 0 30px rgba(34, 197, 94, 0.6)"
+          
+          setTimeout(() => {
+            if (imageRef.current) {
+              imageRef.current.style.boxShadow = ""
+            }
+          }, 2000)
+        }
+      } else {
+        toast.error(data.error || 'Failed to update category')
+      }
+    } catch (error) {
+      console.error('Error toggling category:', error)
+      toast.error('Failed to update category')
+    }
+  }
+
   // Re-analyze all images
   const reAnalyzeAll = async () => {
     if (!confirm('This will re-analyze all images using AI. This may take a while. Continue?')) {
@@ -259,6 +412,7 @@ export default function GalleryManagePage() {
   useEffect(() => {
     fetchImages()
     fetchCategories()
+    fetchAllAvailableCategories()
     checkApiStatus()
   }, [])
 
@@ -295,6 +449,31 @@ export default function GalleryManagePage() {
       return matchesSearch && matchesStatus && matchesCategory
     })
   }, [images, searchQuery, filterStatus, filterCategory])
+
+  // Keyboard navigation for admin modal (moved after filteredImages definition)
+  useEffect(() => {
+    if (!selectedImage) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        const currentImageIndex = filteredImages.findIndex(img => img.id === selectedImage.id)
+        if (e.key === 'ArrowLeft' && currentImageIndex > 0) {
+          const prevImage = filteredImages[currentImageIndex - 1]
+          setSelectedImage(prevImage)
+          setIsEditView(false)
+          fetchAiLabels(prevImage.id).catch(() => {})
+        } else if (e.key === 'ArrowRight' && currentImageIndex < filteredImages.length - 1) {
+          const nextImage = filteredImages[currentImageIndex + 1]
+          setSelectedImage(nextImage)
+          setIsEditView(false)
+          fetchAiLabels(nextImage.id).catch(() => {})
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedImage, filteredImages])
 
   // Toggle selection
   const toggleSelection = (id: string) => {
@@ -549,7 +728,7 @@ export default function GalleryManagePage() {
               <SelectItem value="all">All Categories</SelectItem>
               {allCategories.map((cat) => (
                 <SelectItem key={cat} value={cat}>
-                  {cat}
+                  {capitalizeCategory(cat)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -607,7 +786,7 @@ export default function GalleryManagePage() {
                       variant="secondary"
                       className="flex items-center gap-2 px-3 py-1"
                     >
-                      <span>{cat}</span>
+                      <span>{capitalizeCategory(cat)}</span>
                       <button
                         onClick={() => deleteCategory(cat)}
                         className="ml-1 hover:bg-destructive/20 rounded-full p-0.5"
@@ -694,7 +873,7 @@ export default function GalleryManagePage() {
                                     categoryColors[trimmedCat] || "bg-gray-500"
                                   }`}
                                 >
-                                  {trimmedCat}
+                                  {capitalizeCategory(trimmedCat)}
                                 </Badge>
                               )
                             })
@@ -722,7 +901,13 @@ export default function GalleryManagePage() {
                         <Button
                           size="icon"
                           variant="ghost"
-                          onClick={() => setSelectedImage(img)}
+                          onClick={() => {
+                            // Set image immediately for instant response
+                            setSelectedImage(img)
+                            setIsEditView(false)
+                            // Fetch AI labels asynchronously without blocking
+                            fetchAiLabels(img.id).catch(() => {})
+                          }}
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
@@ -772,139 +957,420 @@ export default function GalleryManagePage() {
       </Card>
 
       {/* Image Detail Modal */}
-      <Dialog open={!!selectedImage} onOpenChange={(open) => !open && setSelectedImage(null)}>
+      <Dialog open={!!selectedImage} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedImage(null)
+          setIsEditView(false)
+          setAiLabels([])
+          setEditingCategory(null)
+          setEditCategoryValue("")
+        }
+      }}>
         <DialogContent className="!max-w-none !w-[calc(100vw-100px)] !max-h-[calc(100vh-100px)] overflow-hidden flex flex-col p-0 gap-0 rounded-none !left-[50px] !top-[50px] !right-[50px] !bottom-[50px] !translate-x-0 !translate-y-0">
           <DialogHeader className="px-3 pt-3 pb-2 border-b">
             <DialogTitle className="text-xl font-bold">
               {selectedImage?.alt || selectedImage?.caption || selectedImage?.gallery?.title || "Image Details"}
             </DialogTitle>
           </DialogHeader>
-          {selectedImage && (
-            <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
-              {/* Image Section */}
-              <div className="w-full lg:w-[55%] flex flex-col bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-3">
-                <div className="relative bg-black/5 dark:bg-black/20 flex items-center justify-center rounded-xl overflow-hidden shadow-2xl border border-gray-200 dark:border-gray-700" style={{ minHeight: '500px', maxHeight: 'calc(95vh - 200px)' }}>
-                  <Image
-                    src={selectedImage.url}
-                    alt={selectedImage.alt || selectedImage.caption || "Gallery image"}
-                    width={1200}
-                    height={900}
-                    className="max-h-full max-w-full object-contain rounded-lg"
-                    unoptimized={selectedImage.url.includes('cloudinary.com')}
-                  />
-                </div>
-              </div>
-
-              {/* Details Section */}
-              <div className="w-full lg:w-[45%] overflow-y-auto flex flex-col bg-white dark:bg-gray-950 p-3 space-y-4 pb-4">
-                {/* Status */}
-                <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Status:</span>
-                    {selectedImage.published ? (
-                      <Badge className="bg-green-600 text-white px-3 py-1">Published</Badge>
-                    ) : (
-                      <Badge variant="secondary" className="px-3 py-1">Draft</Badge>
+          {selectedImage && (() => {
+            const currentImageIndex = filteredImages.findIndex(img => img.id === selectedImage.id)
+            const hasPrevious = currentImageIndex > 0
+            const hasNext = currentImageIndex < filteredImages.length - 1
+            
+            const goToPrevious = () => {
+              if (hasPrevious) {
+                const prevImage = filteredImages[currentImageIndex - 1]
+                setSelectedImage(prevImage)
+                setIsEditView(false)
+                fetchAiLabels(prevImage.id).catch(() => {})
+              }
+            }
+            
+            const goToNext = () => {
+              if (hasNext) {
+                const nextImage = filteredImages[currentImageIndex + 1]
+                setSelectedImage(nextImage)
+                setIsEditView(false)
+                fetchAiLabels(nextImage.id).catch(() => {})
+              }
+            }
+            
+            return (
+              <div className="flex-1 overflow-hidden flex flex-col lg:flex-row relative">
+                {/* Navigation buttons */}
+                {filteredImages.length > 1 && (
+                  <>
+                    {hasPrevious && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={goToPrevious}
+                        className="absolute left-2 top-1/2 -translate-y-1/2 z-50 bg-black/50 hover:bg-black/70 text-white rounded-full h-12 w-12"
+                        title="Previous image (←)"
+                      >
+                        <ChevronLeft className="h-6 w-6" />
+                      </Button>
                     )}
-                  </div>
-                </div>
-
-                {/* Description */}
-                {selectedImage.caption && (
-                  <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
-                    <strong className="text-sm font-semibold text-gray-900 dark:text-gray-100 block mb-2">Description:</strong>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{selectedImage.caption}</p>
-                  </div>
+                    {hasNext && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={goToNext}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 z-50 bg-black/50 hover:bg-black/70 text-white rounded-full h-12 w-12"
+                        title="Next image (→)"
+                      >
+                        <ChevronRight className="h-6 w-6" />
+                      </Button>
+                    )}
+                  </>
                 )}
-
-                {/* Categories */}
-                <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
-                  <div className="flex items-center justify-between mb-3">
-                    <strong className="text-sm font-semibold text-gray-900 dark:text-gray-100">Categories:</strong>
-                    {editingCategory === selectedImage.id ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setEditingCategory(null)
-                          setEditCategoryValue("")
-                        }}
-                        className="h-8"
-                      >
-                        Cancel
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setEditingCategory(selectedImage.id)
-                          setEditCategoryValue(selectedImage.category || "")
-                        }}
-                        className="h-8"
-                      >
-                        Edit
-                      </Button>
+                
+                {/* Image Section */}
+                <div className="w-full lg:w-[55%] flex flex-col bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-3">
+                  <div 
+                    ref={imageRef}
+                    className="relative bg-black/5 dark:bg-black/20 flex items-center justify-center rounded-xl overflow-hidden shadow-2xl border border-gray-200 dark:border-gray-700 transition-all duration-300" 
+                    style={{ minHeight: '500px', maxHeight: 'calc(95vh - 200px)' }}
+                  >
+                    <Image
+                      src={selectedImage.url}
+                      alt={selectedImage.alt || selectedImage.caption || "Gallery image"}
+                      width={1200}
+                      height={900}
+                      className="max-h-full max-w-full object-contain rounded-lg"
+                      loading="eager"
+                      priority
+                      unoptimized={selectedImage.url.includes('cloudinary.com')}
+                    />
+                    {/* Preload adjacent images */}
+                    {hasPrevious && (
+                      <link rel="preload" as="image" href={filteredImages[currentImageIndex - 1].url} />
+                    )}
+                    {hasNext && (
+                      <link rel="preload" as="image" href={filteredImages[currentImageIndex + 1].url} />
                     )}
                   </div>
-                  {editingCategory === selectedImage.id ? (
-                    <div className="space-y-3">
-                      <Input
-                        value={editCategoryValue}
-                        onChange={(e) => setEditCategoryValue(e.target.value)}
-                        placeholder="Enter categories (comma-separated for multiple)"
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter') {
-                            updateImageCategory(selectedImage.id, editCategoryValue)
-                          }
-                        }}
-                        className="h-10"
-                      />
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => updateImageCategory(selectedImage.id, editCategoryValue)}
-                          className="h-9"
-                        >
-                          Save
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setEditingCategory(null)
-                            setEditCategoryValue("")
-                          }}
-                          className="h-9"
-                        >
-                          Cancel
-                        </Button>
-                      </div>
+                </div>
+                
+                {/* Details Section */}
+                <div className="w-full lg:w-[45%] overflow-y-auto flex flex-col bg-white dark:bg-gray-950 p-3 space-y-4 pb-4">
+                {isEditView ? (
+                  /* Edit View - Show Label and Categories */
+                  <div className="space-y-6">
+                    {/* Label Title */}
+                    <div className="border-b border-gray-200 dark:border-gray-700 pb-3">
+                      <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                        Label
+                      </h2>
                     </div>
-                  ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {(selectedImage.category || selectedImage.gallery?.category) ? (
-                        (selectedImage.category || selectedImage.gallery?.category)
-                          .split(",")
-                          .map((cat, idx) => {
-                            const trimmedCat = cat.trim()
+
+                    {/* AI Labels with Percentages */}
+                    {loadingLabels ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
+                      </div>
+                    ) : aiLabels.length > 0 ? (
+                      <div className="space-y-4">
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Categories:
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {aiLabels.map((labelItem, idx) => {
+                            const trimmedLabel = labelItem.label.trim()
+                            const confidencePercent = Math.round(labelItem.confidence * 100)
+                            const imageCategories = (selectedImage.category || selectedImage.gallery?.category || "")
+                              .split(",")
+                              .map(c => c.trim())
+                            const isAssigned = imageCategories.includes(trimmedLabel)
+                            
                             return (
-                              <Badge
+                              <button
                                 key={idx}
-                                className={`text-xs font-medium px-3 py-1.5 text-white shadow-sm ${
-                                  categoryColors[trimmedCat] || "bg-gray-500"
+                                onClick={() => toggleCategory(trimmedLabel)}
+                                className={`transition-all duration-200 hover:scale-105 ${
+                                  isAssigned ? "ring-2 ring-green-500 ring-offset-2" : ""
                                 }`}
+                                title={isAssigned ? `Click to remove "${trimmedLabel}"` : `Click to add "${trimmedLabel}"`}
                               >
-                                {trimmedCat}
-                              </Badge>
+                                  <Badge
+                                    className={`text-sm font-medium px-3 py-1.5 cursor-pointer shadow-sm ${
+                                      categoryColors[trimmedLabel] || "bg-gray-500"
+                                    } text-white hover:opacity-90 ${isAssigned ? "opacity-100" : "opacity-70"}`}
+                                  >
+                                    {capitalizeCategory(trimmedLabel)} {confidencePercent}%
+                                    {isAssigned && <span className="ml-1">✓</span>}
+                                  </Badge>
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                          Click on any category to add or remove it from this image
+                        </p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">
+                          {(() => {
+                            const assigned = (selectedImage.category || selectedImage.gallery?.category || "")
+                              .split(",")
+                              .map(c => c.trim())
+                              .filter(c => c.length > 0)
+                            return assigned.length > 0 
+                              ? `${assigned.length} category${assigned.length > 1 ? 'ies' : ''} assigned to this image`
+                              : "No categories assigned yet"
+                          })()}
+                        </p>
+                      </div>
+                    ) : (
+                      /* Fallback: Show all 20 categories if no AI labels */
+                      <div className="space-y-4">
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Categories:
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                        {allAvailableCategories.length > 0 ? (
+                          allAvailableCategories.map((category, idx) => {
+                            const trimmedCat = category.trim()
+                            // Check if this category is assigned to the image
+                            const imageCategories = (selectedImage.category || selectedImage.gallery?.category || "")
+                              .split(",")
+                              .map(c => c.trim())
+                            const isAssigned = imageCategories.includes(trimmedCat)
+                            
+                            return (
+                              <button
+                                key={idx}
+                                onClick={() => toggleCategory(trimmedCat)}
+                                className={`transition-all duration-200 hover:scale-105 ${
+                                  isAssigned ? "ring-2 ring-green-500 ring-offset-2" : ""
+                                }`}
+                                title={isAssigned ? `Click to remove "${trimmedCat}"` : `Click to add "${trimmedCat}"`}
+                              >
+                                <Badge
+                                  className={`text-sm font-medium px-4 py-2 cursor-pointer shadow-sm ${
+                                    categoryColors[trimmedCat] || "bg-gray-500"
+                                  } text-white hover:opacity-90 ${isAssigned ? "opacity-100" : "opacity-70"}`}
+                                >
+                                  {capitalizeCategory(trimmedCat)}
+                                  {isAssigned && <span className="ml-1">✓</span>}
+                                </Badge>
+                              </button>
                             )
                           })
+                        ) : (
+                          // Fallback: show default 20 categories
+                          [
+                            "Nature", "Travel", "Portrait", "Sports", "Urban", 
+                            "Wildlife", "Food", "Architecture", "Abstract", "Macro",
+                            "Events", "Birds", "Ocean", "Animal", "Landscape",
+                            "Street", "Fashion", "Wedding", "Concert", "Other"
+                          ].map((category, idx) => {
+                            const trimmedCat = category.trim()
+                            const imageCategories = (selectedImage.category || selectedImage.gallery?.category || "")
+                              .split(",")
+                              .map(c => c.trim())
+                            const isAssigned = imageCategories.includes(trimmedCat)
+                            
+                            return (
+                              <button
+                                key={idx}
+                                onClick={() => toggleCategory(trimmedCat)}
+                                className={`transition-all duration-200 hover:scale-105 ${
+                                  isAssigned ? "ring-2 ring-green-500 ring-offset-2" : ""
+                                }`}
+                                title={isAssigned ? `Click to remove "${trimmedCat}"` : `Click to add "${trimmedCat}"`}
+                              >
+                                <Badge
+                                  className={`text-sm font-medium px-4 py-2 cursor-pointer shadow-sm ${
+                                    categoryColors[trimmedCat] || "bg-gray-500"
+                                  } text-white hover:opacity-90 ${isAssigned ? "opacity-100" : "opacity-70"}`}
+                                >
+                                  {capitalizeCategory(trimmedCat)}
+                                  {isAssigned && <span className="ml-1">✓</span>}
+                                </Badge>
+                              </button>
+                            )
+                          })
+                        )}
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                            Click on any category to add or remove it from this image
+                          </p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500">
+                            {(() => {
+                              const assigned = (selectedImage.category || selectedImage.gallery?.category || "")
+                                .split(",")
+                                .map(c => c.trim())
+                                .filter(c => c.length > 0)
+                              return assigned.length > 0 
+                                ? `${assigned.length} category${assigned.length > 1 ? 'ies' : ''} assigned to this image`
+                                : "No categories assigned yet"
+                            })()}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Normal View - Show all details */
+                  <>
+                    {/* Status */}
+                    <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Status:</span>
+                        {selectedImage.published ? (
+                          <Badge className="bg-green-600 text-white px-3 py-1">Published</Badge>
+                        ) : (
+                          <Badge variant="secondary" className="px-3 py-1">Draft</Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    {selectedImage.caption && (
+                      <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
+                        <strong className="text-sm font-semibold text-gray-900 dark:text-gray-100 block mb-2">Description:</strong>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{selectedImage.caption}</p>
+                      </div>
+                    )}
+
+                    {/* Categories */}
+                    <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
+                      <div className="flex items-center justify-between mb-3">
+                        <strong className="text-sm font-semibold text-gray-900 dark:text-gray-100">Categories:</strong>
+                        {editingCategory === selectedImage.id ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditingCategory(null)
+                              setEditCategoryValue("")
+                            }}
+                            className="h-8"
+                          >
+                            Cancel
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditingCategory(selectedImage.id)
+                              setEditCategoryValue(selectedImage.category || "")
+                            }}
+                            className="h-8"
+                          >
+                            Edit
+                          </Button>
+                        )}
+                      </div>
+                      {editingCategory === selectedImage.id ? (
+                        <div className="space-y-3">
+                          <Input
+                            value={editCategoryValue}
+                            onChange={(e) => setEditCategoryValue(e.target.value)}
+                            placeholder="Enter categories (comma-separated for multiple)"
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter') {
+                                updateImageCategory(selectedImage.id, editCategoryValue)
+                              }
+                            }}
+                            className="h-10"
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => updateImageCategory(selectedImage.id, editCategoryValue)}
+                              className="h-9"
+                            >
+                              Save
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setEditingCategory(null)
+                                setEditCategoryValue("")
+                              }}
+                              className="h-9"
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
                       ) : (
-                        <span className="text-muted-foreground text-sm">Uncategorized</span>
+                        <div className="flex flex-wrap gap-2">
+                          {(selectedImage.category || selectedImage.gallery?.category) ? (
+                            (selectedImage.category || selectedImage.gallery?.category)
+                              .split(",")
+                              .map((cat, idx) => {
+                                const trimmedCat = cat.trim()
+                                return (
+                                  <Badge
+                                    key={idx}
+                                    className={`text-xs font-medium px-3 py-1.5 text-white shadow-sm ${
+                                      categoryColors[trimmedCat] || "bg-gray-500"
+                                    }`}
+                                  >
+                                    {capitalizeCategory(trimmedCat)}
+                                  </Badge>
+                                )
+                              })
+                          ) : (
+                            <span className="text-muted-foreground text-sm">Uncategorized</span>
+                          )}
+                        </div>
                       )}
                     </div>
-                  )}
-                </div>
+
+                    {/* Auto-Detected Categories */}
+                    {aiLabels.length > 0 && (
+                      <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
+                        <div className="flex items-center justify-between mb-3">
+                          <strong className="text-sm font-semibold text-gray-900 dark:text-gray-100">Auto-Detected Categories:</strong>
+                        </div>
+                        {loadingLabels ? (
+                          <div className="flex items-center justify-center py-4">
+                            <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            {aiLabels.map((labelItem, idx) => {
+                              const trimmedLabel = labelItem.label.trim()
+                              const confidencePercent = Math.round(labelItem.confidence * 100)
+                              const imageCategories = (selectedImage.category || selectedImage.gallery?.category || "")
+                                .split(",")
+                                .map(c => c.trim())
+                              const isAssigned = imageCategories.includes(trimmedLabel)
+                              
+                              return (
+                                <button
+                                  key={idx}
+                                  onClick={() => toggleCategory(trimmedLabel)}
+                                  className={`transition-all duration-200 hover:scale-105 ${
+                                    isAssigned ? "ring-2 ring-green-500 ring-offset-2" : ""
+                                  }`}
+                                  title={isAssigned ? `Click to remove "${trimmedLabel}"` : `Click to add "${trimmedLabel}"`}
+                                >
+                                  <Badge
+                                    className={`text-xs font-medium px-3 py-1.5 cursor-pointer shadow-sm ${
+                                      categoryColors[trimmedLabel] || "bg-gray-500"
+                                    } text-white hover:opacity-90 ${isAssigned ? "opacity-100" : "opacity-70"}`}
+                                  >
+                                    {capitalizeCategory(trimmedLabel)} {confidencePercent}%
+                                    {isAssigned && <span className="ml-1">✓</span>}
+                                  </Badge>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
+                          Click on any category to add or remove it from this image
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
 
                 {/* File Information */}
                 <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
@@ -954,11 +1420,15 @@ export default function GalleryManagePage() {
                     variant="outline"
                     className="flex-1 h-11 font-medium"
                     onClick={() => {
-                      setEditingCategory(selectedImage.id)
-                      setEditCategoryValue(selectedImage.category || "")
+                      const newEditView = !isEditView
+                      setIsEditView(newEditView)
+                      // Fetch AI labels when entering edit view
+                      if (newEditView && selectedImage) {
+                        fetchAiLabels(selectedImage.id)
+                      }
                     }}
                   >
-                    Edit
+                    {isEditView ? "Back to Details" : "Edit"}
                   </Button>
                   <Button
                     variant={selectedImage.published ? "outline" : "default"}
@@ -1003,9 +1473,11 @@ export default function GalleryManagePage() {
                 </div>
               </div>
             </div>
-          )}
+            )
+          })()}
         </DialogContent>
       </Dialog>
+
     </div>
   )
 }

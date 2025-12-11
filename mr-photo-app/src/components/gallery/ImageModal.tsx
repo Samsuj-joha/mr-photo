@@ -453,14 +453,36 @@ export function ImageModal({
     }
   }, [isPlaying, isOpen, images.length])
 
-  // Navigation functions
+  // Navigation functions - optimized for immediate response
   const goToPrevious = useCallback(() => {
-    setCurrentIndex(prev => prev <= 0 ? images.length - 1 : prev - 1)
-  }, [images.length])
+    setCurrentIndex(prev => {
+      const newIndex = prev <= 0 ? images.length - 1 : prev - 1
+      // Preload the previous image
+      if (newIndex > 0 && images[newIndex - 1]) {
+        const link = document.createElement('link')
+        link.rel = 'preload'
+        link.as = 'image'
+        link.href = images[newIndex - 1].imageUrl
+        document.head.appendChild(link)
+      }
+      return newIndex
+    })
+  }, [images])
 
   const goToNext = useCallback(() => {
-    setCurrentIndex(prev => prev >= images.length - 1 ? 0 : prev + 1)
-  }, [images.length])
+    setCurrentIndex(prev => {
+      const newIndex = prev >= images.length - 1 ? 0 : prev + 1
+      // Preload the next image
+      if (newIndex < images.length - 1 && images[newIndex + 1]) {
+        const link = document.createElement('link')
+        link.rel = 'preload'
+        link.as = 'image'
+        link.href = images[newIndex + 1].imageUrl
+        document.head.appendChild(link)
+      }
+      return newIndex
+    })
+  }, [images])
 
   const togglePlayPause = useCallback(() => {
     setIsPlaying(prev => !prev)
@@ -499,15 +521,12 @@ export function ImageModal({
     }
   }, [isOpen, handleKeyDown])
 
-  // Notify parent of index changes (debounced)
+  // Notify parent of index changes immediately (no debounce for faster navigation)
   useEffect(() => {
     if (isOpen) {
-      const timeout = setTimeout(() => {
-        onIndexChange(currentIndex)
-      }, 100)
-      return () => clearTimeout(timeout)
+      onIndexChange(currentIndex)
     }
-  }, [currentIndex, isOpen])
+  }, [currentIndex, isOpen, onIndexChange])
 
   const openFlickr = useCallback(() => {
     if (images[currentIndex]) {
@@ -649,6 +668,7 @@ export function ImageModal({
               className="object-contain w-full h-full max-w-[70vw] max-h-[60vh] select-none"
               sizes="70vw"
               priority
+              loading="eager"
               unoptimized={activeImage.imageUrl.includes('cloudinary.com')}
               draggable={false}
               onContextMenu={(e) => e.preventDefault()}
@@ -666,6 +686,17 @@ export function ImageModal({
                 pointerEvents: 'none'
               }}
             />
+            {/* Preload adjacent images for faster navigation */}
+            {images.length > 1 && (
+              <>
+                {currentIndex > 0 && (
+                  <link rel="preload" as="image" href={images[currentIndex - 1].imageUrl} />
+                )}
+                {currentIndex < images.length - 1 && (
+                  <link rel="preload" as="image" href={images[currentIndex + 1].imageUrl} />
+                )}
+              </>
+            )}
           </div>
         </div>
 

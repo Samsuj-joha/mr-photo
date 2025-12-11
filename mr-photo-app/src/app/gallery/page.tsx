@@ -19,6 +19,29 @@ export interface GalleryImage {
   galleryTitle: string
 }
 
+// Helper function to capitalize first letter of category names
+const capitalizeCategory = (category: string): string => {
+  if (!category) return category
+  return category.charAt(0).toUpperCase() + category.slice(1).toLowerCase()
+}
+
+// Helper function to normalize category names (merge duplicates like "portraits" -> "portrait")
+const normalizeCategory = (category: string): string => {
+  if (!category) return category
+  const normalized = category.trim().toLowerCase()
+  
+  // Normalize plural forms to singular
+  const normalizations: Record<string, string> = {
+    'portraits': 'portrait',
+    'animals': 'animal',
+    'birds': 'bird',
+    'events': 'event',
+    'sports': 'sport',
+  }
+  
+  return normalizations[normalized] || normalized
+}
+
 export default function GalleryPage() {
   const [images, setImages] = useState<GalleryImage[]>([])
   const [loading, setLoading] = useState(true)
@@ -88,16 +111,24 @@ export default function GalleryPage() {
     const categoryMap: Record<string, GalleryImage[]> = {}
     
     filteredImages.forEach(image => {
-      // Handle comma-separated categories
+      // Handle comma-separated categories and deduplicate
       const categories = image.category
-        ? image.category.split(',').map(c => c.trim()).filter(c => c.length > 0)
+        ? Array.from(new Set(image.category.split(',').map(c => c.trim()).filter(c => c.length > 0)))
         : ['Others']
       
       categories.forEach(cat => {
-        if (!categoryMap[cat]) {
-          categoryMap[cat] = []
+        // Normalize category name (e.g., "portraits" -> "portrait")
+        const normalizedCat = normalizeCategory(cat)
+        // Use the original capitalized form for display, but group by normalized name
+        const displayCat = capitalizeCategory(normalizedCat)
+        
+        if (!categoryMap[displayCat]) {
+          categoryMap[displayCat] = []
         }
-        categoryMap[cat].push(image)
+        // Only add image if it's not already in this category
+        if (!categoryMap[displayCat].some(img => img.id === image.id)) {
+          categoryMap[displayCat].push(image)
+        }
       })
     })
     
@@ -188,12 +219,12 @@ export default function GalleryPage() {
                 {Object.entries(imagesByCategory).map(([category, categoryImages]) => (
                   <div key={category}>
                     <h3 className="text-xl font-semibold mb-4 text-gray-800">
-                      {category} <span className="text-gray-500 text-base font-normal">({categoryImages.length})</span>
+                      {capitalizeCategory(category)} <span className="text-gray-500 text-base font-normal">({categoryImages.length})</span>
                     </h3>
                     <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4">
-                      {categoryImages.map((image) => (
+                      {categoryImages.map((image, index) => (
                         <div
-                          key={image.id}
+                          key={`${category}-${image.id}-${index}`}
                           className="group break-inside-avoid rounded-lg overflow-hidden cursor-pointer transition-all mb-4"
                           onClick={() => handleImageClick(image.id)}
                         >

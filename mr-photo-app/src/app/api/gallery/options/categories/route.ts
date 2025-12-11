@@ -2,6 +2,23 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 
+// Helper function to normalize category names (merge duplicates like "portraits" -> "portrait")
+function normalizeCategory(category: string): string {
+  if (!category) return category
+  const normalized = category.trim().toLowerCase()
+  
+  // Normalize plural forms to singular
+  const normalizations: Record<string, string> = {
+    'portraits': 'portrait',
+    'animals': 'animal',
+    'birds': 'bird',
+    'events': 'event',
+    'sports': 'sport',
+  }
+  
+  return normalizations[normalized] || normalized
+}
+
 export async function GET() {
   try {
     // Get unique categories from IMAGES (not galleries) - this is what users see
@@ -48,19 +65,23 @@ export async function GET() {
       return categories.includes(searchCategory.toLowerCase())
     }
     
-    // Get all unique category names from images
+    // Get all unique category names from images (normalized)
     const allImageCategoryNames = new Set<string>()
     imageCategories.forEach(cat => {
       if (cat.category) {
         const categories = cat.category.split(",").map(c => c.trim()).filter(c => c)
-        categories.forEach(singleCat => allImageCategoryNames.add(singleCat.toLowerCase()))
+        categories.forEach(singleCat => {
+          const normalized = normalizeCategory(singleCat)
+          allImageCategoryNames.add(normalized)
+        })
       }
     })
     
-    // Add gallery categories to the set (for complete list)
+    // Add gallery categories to the set (for complete list, normalized)
     galleryCategories.forEach(cat => {
       if (cat.category) {
-        allImageCategoryNames.add(cat.category.toLowerCase())
+        const normalized = normalizeCategory(cat.category)
+        allImageCategoryNames.add(normalized)
       }
     })
     
@@ -81,12 +102,15 @@ export async function GET() {
       }
     })
     
-    // Count images for each category
+    // Count images for each category (checking both original and normalized forms)
     for (const categoryName of allImageCategoryNames) {
       const count = allImages.filter(img => {
         const imgCategory = img.category || img.gallery.category
         if (!imgCategory) return false
-        const categories = imgCategory.split(",").map(c => c.trim().toLowerCase())
+        const categories = imgCategory.split(",").map(c => {
+          const trimmed = c.trim().toLowerCase()
+          return normalizeCategory(trimmed)
+        })
         return categories.includes(categoryName.toLowerCase())
       }).length
       categoryMap.set(categoryName, count)
