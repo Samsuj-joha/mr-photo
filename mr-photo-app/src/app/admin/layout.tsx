@@ -1,8 +1,8 @@
 "use client"
 
 import { useSession } from "next-auth/react"
-import { redirect, usePathname } from "next/navigation"
-import { ReactNode, Suspense } from "react"
+import { usePathname, useRouter } from "next/navigation"
+import { ReactNode, Suspense, useEffect } from "react"
 import { AdminSidebar } from "@/components/admin/AdminSidebar"
 import { AdminHeader } from "@/components/admin/AdminHeader"
 import { LoadingBar } from "@/components/admin/LoadingBar"
@@ -14,9 +14,19 @@ interface AdminLayoutProps {
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const { data: session, status } = useSession()
   const pathname = usePathname()
+  const router = useRouter()
   
   // Allow login page to be accessed without authentication
   const isLoginPage = pathname === '/admin/login'
+  
+  // Redirect to login if not authenticated or not admin (for protected admin pages)
+  // This hook must be called unconditionally (before any early returns)
+  useEffect(() => {
+    // Only redirect if not on login page and not authenticated/admin
+    if (!isLoginPage && (status === "unauthenticated" || (status === "authenticated" && session?.user?.role !== "ADMIN"))) {
+      router.push("/admin/login")
+    }
+  }, [session, status, router, isLoginPage])
   
   // If it's the login page, don't apply authentication checks and layouts
   if (isLoginPage) {
@@ -34,10 +44,10 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       </div>
     )
   }
-
-  // Redirect to login if not authenticated or not admin (for protected admin pages)
-  if (!session || session.user.role !== "ADMIN") {
-    redirect("/admin/login")
+  
+  // Don't render admin UI if not authenticated
+  if (!session || session.user?.role !== "ADMIN") {
+    return null
   }
 
   return (

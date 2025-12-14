@@ -545,6 +545,14 @@ export function Navbar() {
                 <li key={item.title} className="relative">
                   <Link
                     href={item.href}
+                    prefetch={true}
+                    onClick={() => {
+                      // Trigger loading immediately on click
+                      const event = new CustomEvent('navigation-start', {
+                        detail: { pathname: item.href }
+                      })
+                      window.dispatchEvent(event)
+                    }}
                     className={cn(
                       "relative py-2 text-sm font-medium transition-colors duration-200",
                       "before:content-[''] before:absolute before:bottom-[-4px] before:left-0 before:w-full before:h-[2px]",

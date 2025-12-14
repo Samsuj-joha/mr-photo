@@ -9,42 +9,15 @@ import { convertImageToJPEG, optimizeImage } from "@/lib/imageConverter"
 // GET /api/admin/features - Get all features for admin
 export async function GET(request: NextRequest) {
   try {
-    console.log('🔍 Admin features API called...')
-    
-    // Test database connection first
-    try {
-      await db.$connect()
-      console.log('✅ Database connected successfully')
-    } catch (dbError) {
-      console.error('❌ Database connection failed:', dbError)
-      return NextResponse.json(
-        { error: 'Database connection failed', details: dbError.message },
-        { status: 500 }
-      )
-    }
-
-    // Check authentication
-    let session
-    try {
-      session = await getServerSession(authOptions)
-      console.log('🔐 Session check:', session ? 'Found' : 'Not found')
-    } catch (authError) {
-      console.error('❌ Auth error:', authError)
-      return NextResponse.json(
-        { error: 'Authentication failed', details: authError.message },
-        { status: 500 }
-      )
-    }
+    // Check authentication (Prisma manages connection pool automatically)
+    const session = await getServerSession(authOptions)
     
     if (!session || session.user.role !== 'ADMIN') {
-      console.log('🚫 Unauthorized access attempt')
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       )
     }
-
-    console.log('👤 Admin user authenticated:', session.user.email)
 
     // Try to fetch features
     try {

@@ -128,8 +128,6 @@ export async function GET(request: NextRequest) {
     const limit = searchParams.get("limit")
     const offset = searchParams.get("offset")
 
-    console.log('📖 Fetching public blog posts...')
-
     // Build where clause for filtering
     const where: any = {
       published: true // Only published posts for public
@@ -175,11 +173,10 @@ export async function GET(request: NextRequest) {
 
     const blogs = await db.blog.findMany(queryOptions)
 
-    console.log(`✅ Found ${blogs.length} published blog posts`)
-
     // Also get total count for pagination
     const totalCount = await db.blog.count({ where })
 
+    // Return with caching headers for better performance
     return NextResponse.json({
       blogs,
       pagination: {
@@ -188,6 +185,10 @@ export async function GET(request: NextRequest) {
         offset: offset ? parseInt(offset) : 0,
         hasMore: limit ? (parseInt(offset || "0") + parseInt(limit)) < totalCount : false
       }
+    }, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
+      },
     })
 
   } catch (error) {

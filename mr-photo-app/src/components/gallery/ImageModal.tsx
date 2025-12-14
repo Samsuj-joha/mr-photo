@@ -338,10 +338,12 @@ export function ImageModal({
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(0)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const prevSelectedIndexRef = useRef<number | null>(null)
 
   // Initialize current index when modal opens
   useEffect(() => {
-    if (isOpen && selectedIndex !== null) {
+    if (isOpen && selectedIndex !== null && selectedIndex !== prevSelectedIndexRef.current) {
+      prevSelectedIndexRef.current = selectedIndex
       setCurrentIndex(selectedIndex)
     }
   }, [isOpen, selectedIndex])
@@ -521,12 +523,14 @@ export function ImageModal({
     }
   }, [isOpen, handleKeyDown])
 
-  // Notify parent of index changes immediately (no debounce for faster navigation)
+  // Notify parent of index changes only when user manually changes the index
+  // (not when syncing from selectedIndex to avoid infinite loop)
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && currentIndex !== selectedIndex) {
+      prevSelectedIndexRef.current = currentIndex
       onIndexChange(currentIndex)
     }
-  }, [currentIndex, isOpen, onIndexChange])
+  }, [currentIndex, isOpen, selectedIndex, onIndexChange])
 
   const openFlickr = useCallback(() => {
     if (images[currentIndex]) {

@@ -16,7 +16,12 @@ export async function GET() {
       }
     })
 
-    return NextResponse.json(books)
+    // Return with caching headers for better performance
+    return NextResponse.json(books, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=600',
+      },
+    })
   } catch (error) {
     console.error("Error fetching books:", error)
     return NextResponse.json(

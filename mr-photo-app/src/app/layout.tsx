@@ -6,6 +6,8 @@ import './globals.css'
 import { AuthProvider } from '@/components/providers/AuthProvider'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import { ConditionalLayout } from '@/components/layout/ConditionalLayout'
+import { NavigationProgress } from '@/components/layout/NavigationProgress'
+import { NavigationListener } from '@/components/layout/NavigationListener'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -53,6 +55,8 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
+        <NavigationProgress />
+        <NavigationListener />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

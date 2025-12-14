@@ -91,6 +91,12 @@ export async function POST(request: NextRequest) {
     // Try to fetch image and analyze with imageAnalysis utility
     try {
       console.log(`🔍 Using ${activeProvider} API for category detection...`)
+      if (activeProvider === "azure") {
+        console.log(`🔍 Azure config check:`, {
+          hasEndpoint: !!azureConfig,
+          endpoint: azureConfig ? azureConfig.split("|")[0] : "missing"
+        })
+      }
       
       // Fetch image buffer
       const imageResponse = await fetch(imageUrl)

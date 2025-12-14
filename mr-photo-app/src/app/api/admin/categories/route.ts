@@ -49,19 +49,31 @@ export async function GET() {
       }
     })
 
-    // Combine all categories
+    // Combine all categories and split comma-separated values
     const allCategories = new Set<string>()
     
+    // Helper function to split and add categories
+    const addCategories = (categoryString: string | null) => {
+      if (!categoryString) return
+      // Split by comma and add each individual category
+      const splitCategories = categoryString.split(',').map(c => c.trim()).filter(c => c.length > 0)
+      splitCategories.forEach(cat => {
+        // Normalize: capitalize first letter, lowercase rest
+        const normalized = cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase()
+        allCategories.add(normalized)
+      })
+    }
+    
     galleryCategories.forEach(cat => {
-      if (cat.category) allCategories.add(cat.category)
+      if (cat.category) addCategories(cat.category)
     })
     
     imageCategories.forEach(cat => {
-      if (cat.category) allCategories.add(cat.category)
+      if (cat.category) addCategories(cat.category)
     })
     
     portfolioCategories.forEach(cat => {
-      if (cat.category) allCategories.add(cat.category)
+      if (cat.category) addCategories(cat.category)
     })
 
     const categories = Array.from(allCategories).sort()
@@ -102,36 +114,100 @@ export async function POST(request: NextRequest) {
     }
 
     const categoryName = category.trim()
+    const normalizedCategoryName = categoryName.toLowerCase().trim()
 
-    // Check if category already exists by creating a temporary gallery
-    const existing = await db.gallery.findFirst({
-      where: { category: categoryName }
+    // Helper function to normalize a category name for comparison
+    const normalizeForComparison = (cat: string): string => {
+      return cat.trim().toLowerCase()
+    }
+
+    // Helper function to check if a category string contains the category (handles comma-separated)
+    const containsCategory = (categoryString: string | null): boolean => {
+      if (!categoryString) return false
+      const categories = categoryString.split(',').map(c => normalizeForComparison(c))
+      return categories.includes(normalizedCategoryName)
+    }
+
+    // Check if category already exists in galleries, images, or portfolios
+    // We need to check all records and see if any contain this category (handles comma-separated)
+    const allGalleries = await db.gallery.findMany({
+      where: { 
+        category: { 
+          not: null,
+          not: ""
+        } 
+      },
+      select: { category: true }
     })
 
-    if (existing) {
+    const allImages = await db.galleryImage.findMany({
+      where: { 
+        category: { 
+          not: null,
+          not: ""
+        } 
+      },
+      select: { category: true }
+    })
+
+    const allPortfolios = await db.portfolio.findMany({
+      where: { 
+        category: { 
+          not: null,
+          not: ""
+        } 
+      },
+      select: { category: true }
+    })
+
+    const existsInGalleries = allGalleries.some(g => g.category && containsCategory(g.category))
+    const existsInImages = allImages.some(img => img.category && containsCategory(img.category))
+    const existsInPortfolios = allPortfolios.some(p => p.category && containsCategory(p.category))
+
+    if (existsInGalleries || existsInImages || existsInPortfolios) {
       return NextResponse.json({
-        success: true,
-        message: "Category already exists",
+        success: false,
+        error: "Category already exists",
+        message: `Category "${categoryName}" already exists in the system`,
         category: categoryName
-      })
+      }, { status: 400 })
     }
 
     // Create a temporary unpublished gallery to register the category
-    await db.gallery.create({
-      data: {
-        title: `Category: ${categoryName}`,
-        description: `Temporary gallery for category: ${categoryName}`,
-        category: categoryName,
-        published: false,
-        featured: false
-      }
-    })
+    try {
+      const newGallery = await db.gallery.create({
+        data: {
+          title: `Category: ${categoryName}`,
+          description: `Temporary gallery for category: ${categoryName}`,
+          category: categoryName.trim(),
+          published: false,
+          featured: false
+        }
+      })
 
-    return NextResponse.json({
-      success: true,
-      message: "Category added successfully",
-      category: categoryName
-    })
+      console.log(`✅ Category "${categoryName}" added successfully, gallery ID: ${newGallery.id}`)
+
+      return NextResponse.json({
+        success: true,
+        message: "Category added successfully",
+        category: categoryName
+      })
+    } catch (createError: any) {
+      console.error("❌ Error creating category gallery:", createError)
+      
+      // Check if it's a unique constraint error (category might already exist)
+      if (createError.code === 'P2002' || createError.message?.includes('Unique constraint')) {
+        return NextResponse.json({
+          success: false,
+          error: "Category already exists",
+          message: `Category "${categoryName}" already exists in the system`,
+          category: categoryName
+        }, { status: 400 })
+      }
+      
+      // Re-throw to be caught by outer catch
+      throw createError
+    }
   } catch (error) {
     console.error("Error adding category:", error)
     return NextResponse.json(
@@ -163,18 +239,50 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    // Check if category is used by any galleries, images, or portfolios
-    const galleriesWithCategory = await db.gallery.count({
-      where: { category: category, published: true }
+    const normalizedCategory = category.toLowerCase().trim()
+
+    // Helper function to check if a category string contains the category (handles comma-separated)
+    const containsCategory = (categoryString: string | null): boolean => {
+      if (!categoryString) return false
+      const categories = categoryString.split(',').map(c => c.trim().toLowerCase())
+      return categories.includes(normalizedCategory)
+    }
+
+    // Check if category is used by any published galleries, images, or portfolios
+    // Get all records and check if they contain this category
+    const allGalleries = await db.gallery.findMany({
+      where: { 
+        published: true 
+      },
+      select: { category: true }
     })
 
-    const imagesWithCategory = await db.galleryImage.count({
-      where: { category: category }
+    const allImages = await db.galleryImage.findMany({
+      select: { category: true }
     })
 
-    const portfoliosWithCategory = await db.portfolio.count({
-      where: { category: category, published: true }
+    const allPortfolios = await db.portfolio.findMany({
+      where: { 
+        published: true 
+      },
+      select: { category: true }
     })
+
+    // Filter out null/empty categories in JavaScript
+    const galleriesWithCategory = allGalleries
+      .filter(g => g.category && g.category.trim() !== "")
+      .filter(g => containsCategory(g.category))
+      .length
+
+    const imagesWithCategory = allImages
+      .filter(img => img.category && img.category.trim() !== "")
+      .filter(img => containsCategory(img.category))
+      .length
+
+    const portfoliosWithCategory = allPortfolios
+      .filter(p => p.category && p.category.trim() !== "")
+      .filter(p => containsCategory(p.category))
+      .length
 
     if (galleriesWithCategory > 0 || imagesWithCategory > 0 || portfoliosWithCategory > 0) {
       return NextResponse.json(
@@ -191,18 +299,33 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    // Delete only unpublished temporary galleries with this category
-    const deleted = await db.gallery.deleteMany({
+    // Delete unpublished temporary galleries that contain this category (handles comma-separated)
+    const unpublishedGalleries = await db.gallery.findMany({
       where: {
-        category: category,
         published: false
-      }
+      },
+      select: { id: true, category: true }
     })
+
+    // Filter galleries that have this category (handles null/empty and comma-separated)
+    const galleriesToDelete = unpublishedGalleries
+      .filter(g => g.category && g.category.trim() !== "")
+      .filter(g => containsCategory(g.category))
+
+    const deletedIds = galleriesToDelete.map(g => g.id)
+
+    if (deletedIds.length > 0) {
+      await db.gallery.deleteMany({
+        where: {
+          id: { in: deletedIds }
+        }
+      })
+    }
 
     return NextResponse.json({
       success: true,
       message: "Category removed successfully",
-      deletedCount: deleted.count
+      deletedCount: deletedIds.length
     })
   } catch (error) {
     console.error("Error removing category:", error)

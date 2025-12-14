@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -22,7 +22,7 @@ import {
   ChevronRight,
 } from "lucide-react"
 import { useSession } from "next-auth/react"
-import { useState, useTransition } from "react"
+import { useState } from "react"
 
 const navigation = [
   { 
@@ -106,10 +106,8 @@ const quickActions = [
 
 export function AdminSidebar() {
   const pathname = usePathname()
-  const router = useRouter()
   const { data: session } = useSession()
   const [expandedItems, setExpandedItems] = useState<string[]>([])
-  const [isPending, startTransition] = useTransition()
 
   const toggleExpanded = (itemName: string) => {
     setExpandedItems(prev => 
@@ -123,12 +121,8 @@ export function AdminSidebar() {
     return subItems.some(subItem => pathname === subItem.href)
   }
 
-  const handleNavigation = (href: string, e: React.MouseEvent) => {
-    e.preventDefault()
-    startTransition(() => {
-      router.push(href)
-    })
-  }
+  // Let Link handle navigation naturally for better prefetching
+  // Only use router.push for programmatic navigation
 
   return (
     <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-72 lg:flex-col">
@@ -224,13 +218,18 @@ export function AdminSidebar() {
                                     <Link
                                       href={subItem.href}
                                       prefetch={true}
-                                      onClick={(e) => handleNavigation(subItem.href, e)}
+                                      onClick={() => {
+                                        // Trigger loading immediately on click
+                                        const event = new CustomEvent('navigation-start', {
+                                          detail: { pathname: subItem.href }
+                                        })
+                                        window.dispatchEvent(event)
+                                      }}
                                       className={cn(
                                         isSubItemActive
                                           ? "bg-blue-50 text-blue-700 border-l-3 border-blue-600 shadow-sm dark:bg-blue-900/50 dark:text-blue-300"
                                           : "text-gray-600 hover:text-blue-600 hover:bg-blue-50 hover:border-l-2 hover:border-blue-300 dark:text-gray-400 dark:hover:text-blue-400 dark:hover:bg-gray-800",
-                                        "group flex items-center rounded-lg p-3 text-sm font-medium transition-all duration-200 pl-4 border-l-2 border-transparent",
-                                        isPending && "opacity-70 pointer-events-none"
+                                        "group flex items-center rounded-lg p-3 text-sm font-medium transition-all duration-200 pl-4 border-l-2 border-transparent"
                                       )}
                                     >
                                       <div className="font-medium">{subItem.name}</div>
@@ -245,13 +244,18 @@ export function AdminSidebar() {
                         <Link
                           href={item.href}
                           prefetch={true}
-                          onClick={(e) => handleNavigation(item.href, e)}
+                          onClick={() => {
+                            // Trigger loading immediately on click
+                            const event = new CustomEvent('navigation-start', {
+                              detail: { pathname: item.href }
+                            })
+                            window.dispatchEvent(event)
+                          }}
                           className={cn(
                             isActive
                               ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg shadow-blue-500/30"
                               : "text-gray-700 hover:text-blue-600 hover:bg-gradient-to-r hover:from-blue-50 hover:to-blue-100/60 dark:text-gray-300 dark:hover:bg-gradient-to-r dark:hover:from-gray-800 dark:hover:to-gray-800/80 dark:hover:text-blue-400",
-                            "group flex items-center justify-between rounded-xl p-4 text-sm font-semibold transition-all duration-200 hover:scale-[1.02] hover:shadow-md",
-                            isPending && "opacity-70 pointer-events-none"
+                            "group flex items-center justify-between rounded-xl p-4 text-sm font-semibold transition-all duration-200 hover:scale-[1.02] hover:shadow-md"
                           )}
                         >
                           <div className="flex items-center space-x-3">
@@ -298,10 +302,15 @@ export function AdminSidebar() {
                     <Link
                       href={item.href}
                       prefetch={true}
-                      onClick={(e) => handleNavigation(item.href, e)}
+                      onClick={() => {
+                        // Trigger loading immediately on click
+                        const event = new CustomEvent('navigation-start', {
+                          detail: { pathname: item.href }
+                        })
+                        window.dispatchEvent(event)
+                      }}
                       className={cn(
-                        "text-gray-700 hover:text-purple-600 hover:bg-gradient-to-r hover:from-purple-50 hover:to-purple-100/60 dark:text-gray-300 dark:hover:bg-gradient-to-r dark:hover:from-gray-800 dark:hover:to-gray-800/80 dark:hover:text-purple-400 group flex gap-x-3 rounded-xl p-3.5 text-sm font-semibold transition-all duration-200 hover:scale-[1.02] hover:shadow-md",
-                        isPending && "opacity-70 pointer-events-none"
+                        "text-gray-700 hover:text-purple-600 hover:bg-gradient-to-r hover:from-purple-50 hover:to-purple-100/60 dark:text-gray-300 dark:hover:bg-gradient-to-r dark:hover:from-gray-800 dark:hover:to-gray-800/80 dark:hover:text-purple-400 group flex gap-x-3 rounded-xl p-3.5 text-sm font-semibold transition-all duration-200 hover:scale-[1.02] hover:shadow-md"
                       )}
                     >
                       <item.icon className="h-5 w-5 shrink-0 text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors" />

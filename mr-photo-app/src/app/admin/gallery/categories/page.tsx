@@ -22,8 +22,17 @@ export default function ManageCategoriesPage() {
       if (response.ok) {
         const data = await response.json()
         if (data.success) {
-          setCategories(data.categories || [])
-          await fetchCategoryStats(data.categories || [])
+          // Remove duplicates (case-insensitive)
+          const uniqueCategories = Array.from(
+            new Map(
+              (data.categories || []).map((cat: string) => [
+                cat.toLowerCase(),
+                cat
+              ])
+            ).values()
+          )
+          setCategories(uniqueCategories)
+          await fetchCategoryStats(uniqueCategories)
         }
       }
     } catch (error) {
@@ -39,16 +48,26 @@ export default function ManageCategoriesPage() {
     try {
       const stats: Record<string, { images: number; galleries: number }> = {}
       
-      for (const cat of cats) {
-        // Count images with this category
-        const imagesResponse = await fetch(`/api/gallery/images?category=${encodeURIComponent(cat)}&limit=1`)
-        if (imagesResponse.ok) {
-          const imagesData = await imagesResponse.json()
+      // Fetch all images to count by category
+      const imagesResponse = await fetch(`/api/gallery/images?limit=10000`)
+      if (imagesResponse.ok) {
+        const imagesData = await imagesResponse.json()
+        const allImages = imagesData.images || []
+        
+        // Count images for each category
+        cats.forEach(cat => {
+          const count = allImages.filter((img: any) => {
+            if (!img.category) return false
+            // Handle comma-separated categories
+            const categories = img.category.split(',').map((c: string) => c.trim().toLowerCase())
+            return categories.includes(cat.toLowerCase())
+          }).length
+          
           stats[cat] = {
-            images: imagesData.images?.length || 0,
-            galleries: 0 // Can be added later if needed
+            images: count,
+            galleries: 0
           }
-        }
+        })
       }
       
       setCategoryStats(stats)
@@ -63,8 +82,20 @@ export default function ManageCategoriesPage() {
 
   // Add new category
   const addCategory = async () => {
-    if (!newCategoryName.trim()) {
+    const trimmedName = newCategoryName.trim()
+    if (!trimmedName) {
       toast.error('Please enter a category name')
+      return
+    }
+
+    // Check for duplicate categories (case-insensitive)
+    const normalizedNewCategory = trimmedName.toLowerCase()
+    const isDuplicate = categories.some(
+      cat => cat.toLowerCase() === normalizedNewCategory
+    )
+
+    if (isDuplicate) {
+      toast.error(`Category "${trimmedName}" already exists`)
       return
     }
 
@@ -73,16 +104,31 @@ export default function ManageCategoriesPage() {
       const response = await fetch('/api/admin/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category: newCategoryName.trim() })
+        body: JSON.stringify({ category: trimmedName })
       })
 
       const data = await response.json()
-      if (response.ok && data.success) {
-        toast.success(`Category "${newCategoryName.trim()}" added successfully`)
-        setNewCategoryName("")
-        await fetchCategories()
+      
+      if (!response.ok) {
+        // Handle error responses
+        const errorMessage = data.error || data.message || 'Failed to add category'
+        toast.error(errorMessage)
+        console.error('Category add error:', { status: response.status, data })
+        return
+      }
+
+      if (data.success) {
+        // Check if API also detected a duplicate
+        if (data.message && data.message.includes('already exists')) {
+          toast.error(`Category "${trimmedName}" already exists`)
+        } else {
+          toast.success(`Category "${trimmedName}" added successfully`)
+          setNewCategoryName("")
+          await fetchCategories()
+        }
       } else {
-        toast.error(data.error || 'Failed to add category')
+        toast.error(data.error || data.message || 'Failed to add category')
+        console.error('Category add failed:', data)
       }
     } catch (error) {
       console.error('Error adding category:', error)
@@ -180,11 +226,8 @@ export default function ManageCategoriesPage() {
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Tag className="h-5 w-5" />
-                All Categories ({categories.length})
+                Categories ({categories.length})
               </CardTitle>
-              <CardDescription>
-                Categories currently in use across your galleries, images, and portfolios
-              </CardDescription>
             </div>
             <Button 
               variant="outline" 
@@ -197,7 +240,7 @@ export default function ManageCategoriesPage() {
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {loading && categories.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
@@ -209,33 +252,35 @@ export default function ManageCategoriesPage() {
               <p className="text-sm mt-2">Add your first category above to get started</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {categories.map((category) => {
+            <div className="grid grid-cols-2 border-t border-l">
+              {categories.map((category, index) => {
                 const stats = categoryStats[category] || { images: 0, galleries: 0 }
+                const totalCount = stats.images + stats.galleries
                 return (
                   <div
                     key={category}
-                    className="border rounded-lg p-4 hover:bg-muted/50 transition-colors"
+                    className="flex items-center justify-between px-6 py-4 hover:bg-muted/30 transition-colors cursor-pointer group border-r border-b"
                   >
-                    <div className="flex items-start justify-between mb-2">
-                      <Badge variant="secondary" className="text-sm font-medium px-3 py-1">
-                        {category}
-                      </Badge>
-                      <button
-                        onClick={() => deleteCategory(category)}
-                        className="text-muted-foreground hover:text-destructive transition-colors p-1"
-                        disabled={loading}
-                        title="Delete category"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
+                    <div className="flex items-center gap-3 flex-1">
+                      {/* Blue circular dot */}
+                      <div className="w-2 h-2 rounded-full bg-blue-600 flex-shrink-0" />
+                      {/* Category name with count */}
+                      <span className="text-base font-medium text-gray-900 dark:text-gray-100">
+                        {category} <span className="text-gray-500 dark:text-gray-400 font-normal">({totalCount})</span>
+                      </span>
                     </div>
-                    <div className="text-xs text-muted-foreground mt-2">
-                      <div>Used in {stats.images} image{stats.images !== 1 ? 's' : ''}</div>
-                      {stats.galleries > 0 && (
-                        <div>{stats.galleries} gallery{stats.galleries !== 1 ? 's' : ''}</div>
-                      )}
-                    </div>
+                    {/* Delete button - always visible */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        deleteCategory(category)
+                      }}
+                      className="text-muted-foreground hover:text-destructive transition-colors p-2 rounded-md hover:bg-destructive/10 flex-shrink-0"
+                      disabled={loading}
+                      title={`Delete category "${category}"`}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
                 )
               })}

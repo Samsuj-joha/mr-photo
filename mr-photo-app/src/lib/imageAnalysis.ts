@@ -296,9 +296,11 @@ async function analyzeWithAzure(buffer: Buffer, apiKeyConfig: string, customCate
     // Clean endpoint URL (remove trailing slash and any existing path)
     const cleanEndpoint = endpoint.replace(/\/$/, "").replace(/\/vision\/.*$/, "")
     
-    // Use the latest stable API version (v3.2 is still supported and widely used)
-    // Alternative: v4.0 is available but requires different endpoint structure
-    const apiUrl = `${cleanEndpoint}/vision/v3.2/analyze?visualFeatures=Objects,Tags,Description,Categories`
+    console.log(`🔍 Azure Vision: Using endpoint: ${cleanEndpoint}`)
+    console.log(`🔍 Azure Vision: Image buffer size: ${buffer.length} bytes`)
+    
+    // Try v3.2 first (most compatible), fallback to v4.0 if needed
+    let apiUrl = `${cleanEndpoint}/vision/v3.2/analyze?visualFeatures=Objects,Tags,Description,Categories`
     
     const response = await fetch(apiUrl, {
       method: "POST",
@@ -311,21 +313,28 @@ async function analyzeWithAzure(buffer: Buffer, apiKeyConfig: string, customCate
 
     if (!response.ok) {
       const errorText = await response.text()
+      console.error(`❌ Azure Vision API error (${response.status}):`, errorText)
+      
       let errorMessage = `Azure Vision API error: ${response.status} ${response.statusText}`
       
       // Provide helpful error messages
       if (response.status === 401) {
-        errorMessage = "Azure API authentication failed. Please check your API key."
+        errorMessage = "Azure API authentication failed. Please check your API key and endpoint."
       } else if (response.status === 429) {
         errorMessage = "Azure API rate limit exceeded. Please wait a moment and try again."
       } else if (response.status === 400) {
-        errorMessage = `Azure API request error: ${errorText || "Invalid request format"}`
+        errorMessage = `Azure API request error: ${errorText || "Invalid request format. Check endpoint URL."}`
+      } else if (response.status === 404) {
+        errorMessage = `Azure API endpoint not found. Check your endpoint URL: ${cleanEndpoint}`
       }
       
       throw new Error(errorMessage)
     }
 
     const result = await response.json()
+    console.log(`✅ Azure Vision API response received`)
+    console.log(`📊 Azure tags found: ${result.tags?.length || 0}`)
+    console.log(`📊 Azure objects found: ${result.objects?.length || 0}`)
     
     // Extract tags (labels)
     const tags = result.tags?.map((t: any) => ({ 
@@ -354,6 +363,8 @@ async function analyzeWithAzure(buffer: Buffer, apiKeyConfig: string, customCate
     const labelTexts = allLabels.length > 0 ? allLabels : tags.map((t) => t.label)
     const topCategories = suggestMultipleCategories(labelTexts, customCategories, 5)
     
+    console.log(`✅ Azure analysis complete. Categories: ${topCategories.join(", ")}`)
+    
     return {
       labels: tags.length > 0 ? tags : [{ label: description, confidence: 0.8 }],
       description,
@@ -365,7 +376,12 @@ async function analyzeWithAzure(buffer: Buffer, apiKeyConfig: string, customCate
       objects: objects.length > 0 ? objects : labelTexts.slice(0, 5),
     }
   } catch (error: any) {
-    console.error("Azure Vision API error:", error)
+    console.error("❌ Azure Vision API error:", error)
+    console.error("❌ Error details:", {
+      message: error.message,
+      stack: error.stack,
+      apiKeyConfig: apiKeyConfig ? `${apiKeyConfig.split("|")[0]}...` : "missing"
+    })
     // Re-throw with more context
     throw new Error(`Azure Vision analysis failed: ${error.message || error}`)
   }

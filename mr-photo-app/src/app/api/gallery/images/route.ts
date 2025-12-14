@@ -178,12 +178,17 @@ export async function GET(request: NextRequest) {
       }
     })
 
+    // Return with caching headers for better performance
     return NextResponse.json({
       images: formattedImages,
       total: totalCount,
       limit,
       offset,
       hasMore: offset + limit < totalCount
+    }, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=600',
+      },
     })
   } catch (error) {
     console.error("❌ Error fetching gallery images:", error)
