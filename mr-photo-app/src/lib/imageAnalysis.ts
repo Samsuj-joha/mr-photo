@@ -1,5 +1,5 @@
 // src/lib/imageAnalysis.ts
-// Image analysis utility with support for database categories
+// Image analysis utility with dynamic label-based category detection
 
 export interface ImageAnalysisResult {
   labels: { label: string; confidence: number }[]
@@ -10,8 +10,141 @@ export interface ImageAnalysisResult {
   extractedText: string
   colors: string[]
   objects: string[]
+  allAvailableLabels?: { label: string; confidence: number }[] // All labels for user to choose from
 }
 
+// Generic labels to filter out (too generic or not useful as categories)
+const GENERIC_LABELS = new Set([
+  'image', 'photo', 'photograph', 'picture', 'picture frame', 'graphics',
+  'object', 'thing', 'item', 'stuff', 'entity', 'subject',
+  'art', 'artwork', 'illustration', 'drawing', 'painting',
+  'text', 'font', 'letter', 'word', 'writing',
+  'color', 'colour', 'monochrome', 'black and white',
+  'background', 'foreground', 'scene', 'view', 'sight',
+  'close-up', 'closeup', 'macro', 'detail',
+  'outdoor', 'indoor', 'inside', 'outside',
+  'day', 'night', 'morning', 'evening',
+  'horizontal', 'vertical', 'portrait', 'landscape' // orientation terms
+])
+
+// Normalize a label (handle plurals, capitalization, etc.)
+function normalizeLabel(label: string): string {
+  if (!label) return label
+  
+  let normalized = label.trim().toLowerCase()
+  
+  // Remove common suffixes and normalize plurals
+  const pluralMap: Record<string, string> = {
+    'birds': 'bird',
+    'animals': 'animal',
+    'people': 'person',
+    'persons': 'person',
+    'children': 'child',
+    'flowers': 'flower',
+    'trees': 'tree',
+    'mountains': 'mountain',
+    'buildings': 'building',
+    'vehicles': 'vehicle',
+    'cars': 'car',
+    'boats': 'boat',
+    'planes': 'plane',
+    'insects': 'insect',
+    'butterflies': 'butterfly',
+    'dogs': 'dog',
+    'cats': 'cat',
+    'horses': 'horse',
+    'fish': 'fish', // same singular/plural
+    'deer': 'deer', // same singular/plural
+  }
+  
+  if (pluralMap[normalized]) {
+    normalized = pluralMap[normalized]
+  } else if (normalized.endsWith('s') && normalized.length > 3) {
+    // Try to singularize common plural endings
+    const singular = normalized.slice(0, -1)
+    // Only use singular if it makes sense (not words like 'glass', 'grass')
+    if (!['glass', 'grass', 'class', 'mass', 'pass'].includes(singular)) {
+      normalized = singular
+    }
+  }
+  
+  // Capitalize first letter for display
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1)
+}
+
+// Filter out generic or low-quality labels
+function filterLabels(labels: { label: string; confidence: number }[], minConfidence: number = 0.5): { label: string; confidence: number }[] {
+  return labels
+    .filter(({ label, confidence }) => {
+      const lowerLabel = label.toLowerCase().trim()
+      
+      // Filter by confidence
+      if (confidence < minConfidence) return false
+      
+      // Filter out generic labels
+      if (GENERIC_LABELS.has(lowerLabel)) return false
+      
+      // Filter out very short labels (likely noise)
+      if (lowerLabel.length < 3) return false
+      
+      // Filter out labels that are just numbers
+      if (/^\d+$/.test(lowerLabel)) return false
+      
+      return true
+    })
+    .map(({ label, confidence }) => ({
+      label: normalizeLabel(label),
+      confidence
+    }))
+}
+
+// Deduplicate similar labels (keep the one with highest confidence)
+function deduplicateLabels(labels: { label: string; confidence: number }[]): { label: string; confidence: number }[] {
+  const seen = new Map<string, { label: string; confidence: number }>()
+  
+  for (const item of labels) {
+    const key = item.label.toLowerCase()
+    const existing = seen.get(key)
+    
+    if (!existing || item.confidence > existing.confidence) {
+      seen.set(key, item)
+    }
+  }
+  
+  return Array.from(seen.values())
+}
+
+// Extract top categories directly from AI labels (no predefined categories)
+function extractTopCategoriesFromLabels(
+  labels: { label: string; confidence: number }[],
+  maxCategories: number = 5,
+  minConfidence: number = 0.5
+): { categories: string[], allLabels: { label: string; confidence: number }[] } {
+  // Filter and normalize labels
+  const filtered = filterLabels(labels, minConfidence)
+  
+  // Deduplicate
+  const deduplicated = deduplicateLabels(filtered)
+  
+  // Sort by confidence (highest first)
+  const sorted = deduplicated.sort((a, b) => b.confidence - a.confidence)
+  
+  // Take top categories
+  const topCategories = sorted.slice(0, maxCategories).map(item => item.label)
+  
+  // Return all labels for user to choose from later
+  const allLabels = sorted.map(item => ({
+    label: item.label,
+    confidence: item.confidence
+  }))
+  
+  return {
+    categories: topCategories.length > 0 ? topCategories : ['Other'],
+    allLabels
+  }
+}
+
+// Legacy category keywords (kept for backward compatibility if needed)
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
   Nature: ["landscape", "mountain", "forest", "tree", "sky", "water", "lake", "river", "field", "grass", "nature", "outdoor"],
   Urban: ["city", "building", "street", "road", "urban", "architecture", "downtown", "skyscraper", "concrete"],
@@ -182,7 +315,7 @@ function suggestMultipleCategories(labels: string[], customCategories?: { id: nu
   return []
 }
 
-async function analyzeWithGoogle(buffer: Buffer, apiKey: string, customCategories?: { id: number; name: string }[]): Promise<ImageAnalysisResult> {
+async function analyzeWithGoogle(buffer: Buffer, apiKey: string): Promise<ImageAnalysisResult> {
   try {
     const base64Image = buffer.toString("base64")
     const requestBody = {
@@ -229,17 +362,22 @@ async function analyzeWithGoogle(buffer: Buffer, apiKey: string, customCategorie
       else colors.push("neutral")
     })
 
-    const labelTexts = labels.map((l) => l.label)
-    const topCategories = suggestMultipleCategories(labelTexts, customCategories, 5)
+    // Use dynamic label-based category extraction
+    const categoryResult = extractTopCategoriesFromLabels(labels, 5, 0.5)
+    
     return {
       labels,
-      description: labelTexts.slice(0, 3).join(", "),
-      suggestedCategory: topCategories[0] || "Other",
-      suggestedCategories: topCategories, // Multiple categories (up to 5)
-      suggestedCategoryMatches: scoreCategories(labelTexts, customCategories),
+      description: labels.slice(0, 3).map(l => l.label).join(", "),
+      suggestedCategory: categoryResult.categories[0] || "Other",
+      suggestedCategories: categoryResult.categories, // Top 4-5 categories
+      suggestedCategoryMatches: categoryResult.allLabels.slice(0, 10).map(l => ({ 
+        name: l.label, 
+        score: Math.round(l.confidence * 100) 
+      })),
       extractedText: extractedText.trim(),
       colors: [...new Set(colors)],
       objects: [...new Set(objects)],
+      allAvailableLabels: categoryResult.allLabels, // All labels for user selection
     }
   } catch (error) {
     console.error("Google Vision API error:", error)
@@ -247,7 +385,7 @@ async function analyzeWithGoogle(buffer: Buffer, apiKey: string, customCategorie
   }
 }
 
-async function analyzeWithClarifai(buffer: Buffer, apiKey: string, customCategories?: { id: number; name: string }[]): Promise<ImageAnalysisResult> {
+async function analyzeWithClarifai(buffer: Buffer, apiKey: string): Promise<ImageAnalysisResult> {
   try {
     const base64Image = buffer.toString("base64")
     const response = await fetch("https://api.clarifai.com/v2/users/clarifai/apps/main/models/aaa03c23b3724a16a56b629203edc62c/outputs", {
@@ -270,17 +408,22 @@ async function analyzeWithClarifai(buffer: Buffer, apiKey: string, customCategor
       confidence: c.value || 0,
     }))
 
-    const labelTexts = labels.map((l) => l.label)
-    const topCategories = suggestMultipleCategories(labelTexts, customCategories, 5)
+    // Use dynamic label-based category extraction
+    const categoryResult = extractTopCategoriesFromLabels(labels, 5, 0.5)
+    
     return {
       labels,
-      description: labelTexts.slice(0, 3).join(", "),
-      suggestedCategory: topCategories[0] || "Other",
-      suggestedCategories: topCategories, // Multiple categories (up to 5)
-      suggestedCategoryMatches: scoreCategories(labelTexts, customCategories),
+      description: labels.slice(0, 3).map(l => l.label).join(", "),
+      suggestedCategory: categoryResult.categories[0] || "Other",
+      suggestedCategories: categoryResult.categories, // Top 4-5 categories
+      suggestedCategoryMatches: categoryResult.allLabels.slice(0, 10).map(l => ({ 
+        name: l.label, 
+        score: Math.round(l.confidence * 100) 
+      })),
       extractedText: "",
       colors: [],
-      objects: labelTexts.slice(0, 5),
+      objects: labels.slice(0, 5).map(l => l.label),
+      allAvailableLabels: categoryResult.allLabels, // All labels for user selection
     }
   } catch (error) {
     console.error("Clarifai API error:", error)
@@ -288,7 +431,7 @@ async function analyzeWithClarifai(buffer: Buffer, apiKey: string, customCategor
   }
 }
 
-async function analyzeWithAzure(buffer: Buffer, apiKeyConfig: string, customCategories?: { id: number; name: string }[]): Promise<ImageAnalysisResult> {
+async function analyzeWithAzure(buffer: Buffer, apiKeyConfig: string): Promise<ImageAnalysisResult> {
   try {
     const [endpoint, key] = apiKeyConfig.split("|")
     if (!endpoint || !key) throw new Error("Invalid Azure format. Use: endpoint|key")
@@ -353,27 +496,32 @@ async function analyzeWithAzure(buffer: Buffer, apiKeyConfig: string, customCate
     // Extract categories (if available)
     const categories = result.categories?.map((c: any) => c.name) || []
     
-    // Combine tags, objects, and categories for better categorization
-    const allLabels = [
-      ...tags.map(t => t.label),
-      ...objects,
-      ...categories
+    // Combine tags, objects, and categories into label format
+    const allLabels: { label: string; confidence: number }[] = [
+      ...tags,
+      ...objects.map(obj => ({ label: obj, confidence: 0.7 })),
+      ...categories.map(cat => ({ label: cat, confidence: 0.6 }))
     ]
     
-    const labelTexts = allLabels.length > 0 ? allLabels : tags.map((t) => t.label)
-    const topCategories = suggestMultipleCategories(labelTexts, customCategories, 5)
+    // Use dynamic label-based category extraction
+    const labelsToUse = allLabels.length > 0 ? allLabels : (tags.length > 0 ? tags : [{ label: description, confidence: 0.8 }])
+    const categoryResult = extractTopCategoriesFromLabels(labelsToUse, 5, 0.5)
     
-    console.log(`✅ Azure analysis complete. Categories: ${topCategories.join(", ")}`)
+    console.log(`✅ Azure analysis complete. Categories: ${categoryResult.categories.join(", ")}`)
     
     return {
-      labels: tags.length > 0 ? tags : [{ label: description, confidence: 0.8 }],
+      labels: labelsToUse,
       description,
-      suggestedCategory: topCategories[0] || "Other",
-      suggestedCategories: topCategories, // Multiple categories (up to 5)
-      suggestedCategoryMatches: scoreCategories(labelTexts, customCategories),
+      suggestedCategory: categoryResult.categories[0] || "Other",
+      suggestedCategories: categoryResult.categories, // Top 4-5 categories
+      suggestedCategoryMatches: categoryResult.allLabels.slice(0, 10).map(l => ({ 
+        name: l.label, 
+        score: Math.round(l.confidence * 100) 
+      })),
       extractedText: "",
       colors: [],
-      objects: objects.length > 0 ? objects : labelTexts.slice(0, 5),
+      objects: objects.length > 0 ? objects : labelsToUse.slice(0, 5).map(l => l.label),
+      allAvailableLabels: categoryResult.allLabels, // All labels for user selection
     }
   } catch (error: any) {
     console.error("❌ Azure Vision API error:", error)
@@ -392,14 +540,11 @@ export async function analyzeImageBuffer(
   mimeType: string,
   provider?: string,
   apiKey?: string,
-  customCategories?: { id: number; name: string }[]
+  customCategories?: { id: number; name: string }[] // Kept for backward compatibility but not used in new approach
 ): Promise<ImageAnalysisResult> {
   try {
-    // Fetch categories from database if not provided
-    let categoriesToUse = customCategories
-    if (!categoriesToUse) {
-      categoriesToUse = await fetchDatabaseCategories()
-    }
+    // Note: We no longer use predefined categories - we extract directly from AI labels
+    // customCategories parameter is kept for backward compatibility
 
     const providerToUse = provider || process.env.IMAGE_ANALYSIS_PROVIDER || "clarifai"
     let keyToUse = apiKey
@@ -436,11 +581,11 @@ export async function analyzeImageBuffer(
     }
 
     if (providerToUse === "google") {
-      return await analyzeWithGoogle(buffer, keyToUse, categoriesToUse)
+      return await analyzeWithGoogle(buffer, keyToUse)
     } else if (providerToUse === "clarifai") {
-      return await analyzeWithClarifai(buffer, keyToUse, categoriesToUse)
+      return await analyzeWithClarifai(buffer, keyToUse)
     } else if (providerToUse === "azure") {
-      return await analyzeWithAzure(buffer, keyToUse, categoriesToUse)
+      return await analyzeWithAzure(buffer, keyToUse)
     } else {
       console.warn(`Unknown provider: ${providerToUse}, using fallback`)
       return getFallbackAnalysis()
@@ -461,6 +606,7 @@ function getFallbackAnalysis(): ImageAnalysisResult {
     extractedText: "",
     colors: ["blue", "green", "neutral"],
     objects: ["scene"],
+    allAvailableLabels: [{ label: "Other", confidence: 0.7 }],
   }
 }
 

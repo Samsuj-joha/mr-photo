@@ -131,17 +131,24 @@ export default function GalleryManagePage() {
           if (imagesResponse.ok) {
             const galleryData = await imagesResponse.json()
             if (galleryData.images && Array.isArray(galleryData.images)) {
-              const galleryImages = galleryData.images.map((img: any) => ({
-                ...img,
-                galleryId: gallery.id,
-                gallery: {
-                  id: gallery.id,
-                  title: gallery.title,
-                  category: gallery.category,
-                  country: gallery.country,
-                  published: gallery.published,
+              const galleryImages = galleryData.images.map((img: any) => {
+                // Debug: Log the createdAt date
+                console.log(`📅 Image ${img.id} createdAt:`, img.createdAt, typeof img.createdAt)
+                const dateObj = new Date(img.createdAt)
+                console.log(`   Parsed date:`, dateObj.toISOString(), `Year: ${dateObj.getFullYear()}, Month: ${dateObj.getMonth() + 1}`)
+                
+                return {
+                  ...img,
+                  galleryId: gallery.id,
+                  gallery: {
+                    id: gallery.id,
+                    title: gallery.title,
+                    category: gallery.category,
+                    country: gallery.country,
+                    published: gallery.published,
+                  }
                 }
-              }))
+              })
               allImages.push(...galleryImages)
             }
           }
@@ -883,11 +890,25 @@ export default function GalleryManagePage() {
                       </div>
                     </td>
                     <td className="p-4 text-muted-foreground w-24 text-sm">
-                      {new Date(img.createdAt).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric'
-                      })}
+                      {(() => {
+                        const date = new Date(img.createdAt)
+                        const formatted = date.toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })
+                        // Debug: Log what's being displayed
+                        if (process.env.NODE_ENV === 'development') {
+                          console.log(`📅 Displaying date for ${img.id}:`, {
+                            raw: img.createdAt,
+                            parsed: date.toISOString(),
+                            formatted: formatted,
+                            year: date.getFullYear(),
+                            month: date.getMonth() + 1
+                          })
+                        }
+                        return formatted
+                      })()}
                     </td>
                     <td className="p-4 w-24">
                       {img.published ? (

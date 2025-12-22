@@ -58,12 +58,24 @@ export default function GalleryPage() {
       params.append("offset", "0")
 
       const response = await fetch(`/api/gallery/images?${params}`, {
-        // Use cache for faster loading - this is client-side, so we rely on browser cache
-        cache: 'default'
+        // Use cache: 'no-store' to ensure we get the latest published images
+        cache: 'no-store'
       })
       if (response.ok) {
         const data = await response.json()
-        setImages(data.images || data)
+        const imagesList = data.images || data
+        setImages(imagesList)
+        
+        // Debug: Log what images we received
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`📸 Fetched ${imagesList.length} images from API`)
+          const years = new Set(imagesList.map((img: GalleryImage) => {
+            const date = img.createdAt ? new Date(img.createdAt) : (img.year ? new Date(img.year, 0, 1) : new Date())
+            return date.getFullYear()
+          }))
+          const sortedYears = Array.from(years).map(y => Number(y)).sort((a, b) => b - a)
+          console.log(`📅 Years found in images:`, sortedYears)
+        }
       } else {
         toast.error('Failed to load images')
       }
@@ -249,7 +261,7 @@ export default function GalleryPage() {
                           })}
                           
                           {albumImages.length > 1 && (
-                            <div className="absolute top-2 right-2 bg-black/80 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-md font-medium shadow-lg z-50">
+                            <div className="absolute top-2 right-2 bg-black/80 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-md font-medium shadow-lg z-10">
                               {albumImages.length}
                             </div>
                           )}
@@ -318,7 +330,7 @@ export default function GalleryPage() {
                           })}
                           
                           {categoryImages.length > 1 && (
-                            <div className="absolute top-2 right-2 bg-black/80 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-md font-medium shadow-lg z-50">
+                            <div className="absolute top-2 right-2 bg-black/80 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-md font-medium shadow-lg z-10">
                               {categoryImages.length}
                             </div>
                           )}

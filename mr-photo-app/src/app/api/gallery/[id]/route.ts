@@ -23,13 +23,40 @@ export async function GET(
       where: { id },
       include: {
         images: {
-          orderBy: { order: "asc" }
+          orderBy: { order: "asc" },
+          select: {
+            id: true,
+            url: true,
+            publicId: true,
+            alt: true,
+            caption: true,
+            order: true,
+            loves: true,
+            year: true,
+            category: true,
+            published: true,
+            createdAt: true, // Explicitly select createdAt
+            galleryId: true
+          }
         },
         _count: {
           select: { images: true }
         }
       }
     })
+    
+    // Debug: Log dates for first few images
+    if (gallery && gallery.images && gallery.images.length > 0) {
+      console.log(`\n📅 Gallery ${id} - First 3 image dates:`)
+      gallery.images.slice(0, 3).forEach((img: any, idx: number) => {
+        console.log(`  Image ${idx + 1} (${img.id}):`, {
+          createdAt: img.createdAt,
+          createdAtType: typeof img.createdAt,
+          createdAtISO: img.createdAt?.toISOString?.() || 'N/A',
+          year: img.year || new Date(img.createdAt).getFullYear()
+        })
+      })
+    }
     
     // If gallery doesn't exist, return 404
     if (!gallery) {

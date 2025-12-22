@@ -3,7 +3,7 @@
 // with safe fallbacks to filename-based heuristics.
 
 import { NextRequest, NextResponse } from "next/server"
-import { analyzeImageBuffer, getAllCategories } from "@/lib/imageAnalysis"
+import { analyzeImageBuffer } from "@/lib/imageAnalysis"
 
 // Fixed gallery categories as fallback
 const GALLERY_CATEGORIES = [
@@ -35,14 +35,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Fetch categories from database
-    let customCategories: { id: number; name: string }[] = []
-    try {
-      customCategories = await getAllCategories()
-      console.log(`✅ Loaded ${customCategories.length} categories from database`)
-    } catch (error) {
-      console.warn("⚠️ Could not load categories from database, using fallback")
-    }
+    // Note: We now use dynamic label-based categories, no need to fetch predefined categories
 
     // Get API key and provider from database settings
     let clarifaiApiKey: string | null = null
@@ -137,27 +130,31 @@ export async function POST(request: NextRequest) {
           buffer,
           mimeType,
           provider,
-          apiKey,
-          customCategories
+          apiKey
         )
 
-        // Get top 3 categories (excluding the main one if it's already in the list)
+        // Get top categories (4-5 highest confidence labels)
         const topCategories = analysisResult.suggestedCategories || [analysisResult.suggestedCategory]
-        const alternatives = analysisResult.suggestedCategoryMatches
-          .filter(m => m.name !== analysisResult.suggestedCategory && m.score > 0)
-          .slice(0, 2)
-          .map(m => m.name)
+        
+        // Get remaining labels (6th onwards) for user to optionally add
+        const remainingLabels = analysisResult.allAvailableLabels 
+          ? analysisResult.allAvailableLabels.slice(topCategories.length)
+          : []
 
         return NextResponse.json({
           success: true,
           category: analysisResult.suggestedCategory,
-          categories: topCategories, // Multiple categories
+          categories: topCategories, // Top 4-5 categories (highest confidence)
           confidence: analysisResult.labels[0]?.confidence || 0.8,
           reasoning: analysisResult.description,
           method: `${provider}_vision`,
-          alternatives: alternatives,
-          allMatches: analysisResult.suggestedCategoryMatches.slice(0, 5),
-          labels: analysisResult.labels.slice(0, 5)
+          // All available labels for user to choose from (including top categories)
+          allAvailableLabels: analysisResult.allAvailableLabels || [],
+          // Remaining labels (not in top categories) for user to optionally add
+          remainingLabels: remainingLabels,
+          // Top matches with scores
+          allMatches: analysisResult.suggestedCategoryMatches.slice(0, 10),
+          labels: analysisResult.labels.slice(0, 10)
         })
       }
     } catch (analysisError: any) {

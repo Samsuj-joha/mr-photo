@@ -656,7 +656,9 @@ import { db } from "@/lib/db"
 import { processImageForUpload } from "@/lib/imageProcessor"
 
 export async function POST(request: NextRequest) {
+  console.log("=".repeat(80))
   console.log("🚀 Upload API called with TIFF support")
+  console.log("=".repeat(80))
   
   try {
     // Step 1: Check environment variables
@@ -688,6 +690,27 @@ export async function POST(request: NextRequest) {
     const caption = formData.get("caption") as string || ""
     const title = formData.get("title") as string || ""
     const year = formData.get("year") as string | null
+    const month = formData.get("month") as string | null
+    const dateString = formData.get("date") as string | null // ISO date string for album grouping
+    const published = formData.get("published") === "true" // Whether to publish immediately
+    
+    console.log("=".repeat(80))
+    console.log("📋 FORM DATA RECEIVED:")
+    console.log(`   Year: ${year} (type: ${typeof year})`)
+    console.log(`   Month: ${month} (type: ${typeof month})`)
+    console.log(`   Date String: ${dateString}`)
+    console.log(`   Published: ${published}`)
+    console.log("=".repeat(80))
+    
+    // Debug: Check if year/month are being received correctly
+    if (year && month) {
+      const yearNum = parseInt(year)
+      const monthNum = parseInt(month)
+      console.log(`📋 Parsed values: Year=${yearNum}, Month=${monthNum}`)
+      if (isNaN(yearNum) || isNaN(monthNum)) {
+        console.error(`❌ ERROR: Invalid year/month values! Year=${year}, Month=${month}`)
+      }
+    }
     
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 })
@@ -831,22 +854,17 @@ export async function POST(request: NextRequest) {
 
         if (categoryResponse.ok) {
           const categoryData = await categoryResponse.json()
-          // Support multiple categories - use categories array if available, otherwise combine with alternatives
+          // Use dynamic label-based categories (top 4-5 highest confidence labels)
           if (categoryData.categories && categoryData.categories.length > 0) {
-            // Use the categories array directly (already top 3)
+            // Use the categories array directly (top 4-5 categories from AI labels)
             detectedCategory = categoryData.categories.join(", ")
-          } else if (categoryData.alternatives && categoryData.alternatives.length > 0) {
-            // Fallback: combine main category with alternatives (top 3)
-            const allCategories = [
-              categoryData.category,
-              ...categoryData.alternatives.slice(0, 2)
-            ].filter((cat, idx, arr) => arr.indexOf(cat) === idx) // Remove duplicates
-            detectedCategory = allCategories.join(", ")
           } else {
+            // Fallback to single category
             detectedCategory = categoryData.category || "Others"
           }
           const method = categoryData.method || "unknown"
           console.log(`✅ Category detected: ${detectedCategory} (method: ${method}, confidence: ${categoryData.confidence || 'N/A'})`)
+          console.log(`📊 Available labels: ${categoryData.allAvailableLabels?.length || 0} (top ${categoryData.categories?.length || 0} selected)`)
           
           // Warn if using fallback method (but only once to reduce log noise)
           if (method.includes("filename") || method.includes("fallback")) {
@@ -867,8 +885,14 @@ export async function POST(request: NextRequest) {
 
       // Step 7: Save to database ONLY if galleryId is provided
       // For home slider and other non-gallery uploads, just return Cloudinary result
+      console.log("=".repeat(80))
+      console.log(`💾 Checking galleryId: ${galleryId}`)
+      console.log("=".repeat(80))
+      
       if (galleryId) {
+        console.log("=".repeat(80))
         console.log("💾 Saving image to gallery database...")
+        console.log("=".repeat(80))
         
         // Step 8: Save to database
         const lastImage = await db.galleryImage.findFirst({
@@ -883,6 +907,57 @@ export async function POST(request: NextRequest) {
         
         // Use provided year or default to current year
         const uploadYear = year ? parseInt(year) : new Date().getFullYear()
+        
+        // Use provided date for createdAt (for album grouping) or default to now
+        let createdAtDate: Date
+        if (year && month) {
+          // Always construct from year and month if provided (most reliable)
+          const yearNum = parseInt(year)
+          const monthNum = parseInt(month)
+          
+          console.log("\n" + "=".repeat(80))
+          console.log("📅 CONSTRUCTING DATE FROM YEAR/MONTH")
+          console.log("=".repeat(80))
+          console.log(`Raw values: year="${year}", month="${month}"`)
+          console.log(`Parsed values: yearNum=${yearNum}, monthNum=${monthNum}`)
+          console.log(`Validations: yearNum isNaN=${isNaN(yearNum)}, monthNum isNaN=${isNaN(monthNum)}, monthNum range=${monthNum >= 1 && monthNum <= 12}`)
+          
+          if (!isNaN(yearNum) && !isNaN(monthNum) && monthNum >= 1 && monthNum <= 12) {
+            // Use UTC to avoid timezone issues - set to first day of month at noon UTC
+            // Note: JavaScript Date.UTC uses 0-based months (0=Jan, 11=Dec), so subtract 1
+            createdAtDate = new Date(Date.UTC(yearNum, monthNum - 1, 1, 12, 0, 0))
+            console.log(`✅ Constructed date: ${createdAtDate.toISOString()}`)
+            console.log(`   Expected: Year ${yearNum}, Month ${monthNum} (${monthNum === 1 ? 'January' : monthNum === 12 ? 'December' : 'Other'})`)
+            console.log(`   Actual: Year ${createdAtDate.getUTCFullYear()}, Month ${createdAtDate.getUTCMonth() + 1}`)
+            console.log("=".repeat(80) + "\n")
+          } else {
+            console.warn(`⚠️ Invalid year/month: ${year}/${month}, using current date`)
+            createdAtDate = new Date()
+          }
+        } else if (dateString) {
+          try {
+            createdAtDate = new Date(dateString)
+            // Validate the date
+            if (isNaN(createdAtDate.getTime())) {
+              console.warn(`⚠️ Invalid date string: ${dateString}, using current date`)
+              createdAtDate = new Date()
+            } else {
+              console.log(`📅 Using provided date string: ${dateString} -> ${createdAtDate.toISOString()}`)
+            }
+          } catch (error) {
+            console.warn(`⚠️ Error parsing date string: ${dateString}, using current date`, error)
+            createdAtDate = new Date()
+          }
+        } else {
+          console.log(`📅 No date provided, using current date`)
+          createdAtDate = new Date()
+        }
+        
+        console.log("=".repeat(80))
+        console.log(`📅 FINAL CREATED AT DATE: ${createdAtDate.toISOString()}`)
+        console.log(`   Year: ${uploadYear}, Month: ${month || 'N/A'}`)
+        console.log(`   Date object: ${createdAtDate}`)
+        console.log("=".repeat(80))
 
         // Create gallery image with year and category fields
         let galleryImage
@@ -898,12 +973,93 @@ export async function POST(request: NextRequest) {
           galleryId: galleryId,
           year: uploadYear,
           category: detectedCategory,
-          published: false, // Images start as draft, must be published to appear on gallery
+          published: published, // Use provided publish status or default to false
+          createdAt: createdAtDate, // Set custom date for album grouping
         }
         
         try {
+          // Create image first (Prisma may ignore createdAt with @default, so we'll update it)
+          console.log("\n\n" + "=".repeat(80))
+          console.log("💾 CREATING IMAGE IN DATABASE")
+          console.log("=".repeat(80))
+          console.log(`Target createdAt: ${createdAtDate.toISOString()}`)
+          console.log(`Year: ${uploadYear}, Month: ${month}`)
+          console.log("=".repeat(80) + "\n")
+          
           galleryImage = await db.galleryImage.create({ data: dataToCreate })
-          console.log("✅ Image saved to gallery database")
+          
+          console.log("\n" + "=".repeat(80))
+          console.log("✅ IMAGE CREATED IN DATABASE")
+          console.log("=".repeat(80))
+          console.log(`Initial createdAt: ${galleryImage.createdAt.toISOString()}`)
+          console.log(`Target createdAt: ${createdAtDate.toISOString()}`)
+          console.log("=".repeat(80) + "\n")
+          
+          // Always update createdAt using raw SQL to ensure it matches the selected date
+          // Prisma's @default(now()) can prevent normal updates, so we use raw SQL
+          try {
+            // Format date as ISO string for PostgreSQL
+            const dateISO = createdAtDate.toISOString()
+            console.log("\n" + "=".repeat(80))
+            console.log("🔄 UPDATING CREATED AT VIA SQL")
+            console.log("=".repeat(80))
+            console.log(`Date ISO: ${dateISO}`)
+            console.log(`Image ID: ${galleryImage.id}`)
+            
+            // Use $executeRawUnsafe with properly formatted date string
+            // PostgreSQL expects timestamp in format: 'YYYY-MM-DD HH:MM:SS' or ISO format
+            // Convert Date to PostgreSQL-compatible string format
+            const pgTimestamp = createdAtDate.toISOString().replace('T', ' ').slice(0, 19)
+            console.log(`PostgreSQL timestamp: ${pgTimestamp}`)
+            console.log("=".repeat(80) + "\n")
+            
+            await db.$executeRawUnsafe(
+              `UPDATE "GalleryImage" SET "createdAt" = $1::timestamp WHERE id = $2`,
+              pgTimestamp,
+              galleryImage.id
+            )
+            
+            console.log("✅ SQL UPDATE EXECUTED\n")
+            
+            // Fetch the updated image to verify
+            galleryImage = await db.galleryImage.findUnique({
+              where: { id: galleryImage.id }
+            })
+            
+            if (!galleryImage) {
+              throw new Error("Failed to fetch updated image")
+            }
+            
+            const finalDate = galleryImage.createdAt.toISOString()
+            console.log("\n" + "=".repeat(80))
+            console.log("✅ CREATED AT UPDATED")
+            console.log("=".repeat(80))
+            console.log(`Final createdAt: ${finalDate}`)
+            console.log(`Expected: ${dateISO}`)
+            
+            // Verify the date was actually updated
+            const dateDiff = Math.abs(new Date(finalDate).getTime() - createdAtDate.getTime())
+            if (dateDiff > 60000) { // More than 1 minute difference
+              console.warn(`⚠️ DATE MISMATCH! Diff: ${dateDiff}ms`)
+            } else {
+              console.log(`✅ Date verified: Match within tolerance (${dateDiff}ms difference)`)
+            }
+            console.log("=".repeat(80) + "\n")
+          } catch (updateError: any) {
+            console.error("❌ Error updating createdAt with raw SQL:", updateError)
+            // Try Prisma update as fallback
+            try {
+              console.log("🔄 Trying Prisma update as fallback...")
+              galleryImage = await db.galleryImage.update({
+                where: { id: galleryImage.id },
+                data: { createdAt: createdAtDate }
+              })
+              console.log(`✅ Updated createdAt via Prisma update: ${galleryImage.createdAt.toISOString()}`)
+            } catch (prismaError: any) {
+              console.error("❌ Prisma update also failed:", prismaError)
+              console.warn("⚠️ Continuing with original createdAt date - image created but date may be incorrect")
+            }
+          }
         } catch (error: any) {
           // If creation fails, return the error
           console.error("❌ Failed to create image in database:", error)

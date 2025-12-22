@@ -40,6 +40,11 @@ export default function AdminImageUpload() {
     imageTitle?: string
     categories?: string
   } | null>(null)
+  
+  // Date selection state for album creation
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1)
+  const [publishImmediately, setPublishImmediately] = useState<boolean>(false)
 
   // Format file size
   const formatFileSize = (bytes: number) => {
@@ -50,38 +55,8 @@ export default function AdminImageUpload() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
-  // Dropzone configuration
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    // Create uploading images
-    const newImages: UploadingImage[] = acceptedFiles.map(file => ({
-      id: Math.random().toString(36).substr(2, 9),
-      file,
-      preview: URL.createObjectURL(file),
-      fileName: file.name,
-      fileSize: formatFileSize(file.size),
-      status: 'analyzing' as const
-    }))
-
-    setUploadingImages(prev => [...prev, ...newImages])
-    setIsUploading(true)
-
-    // Start uploading each image
-    for (const image of newImages) {
-      await uploadImage(image)
-    }
-  }, [])
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      'image/*': ['.jpeg', '.jpg', '.png', '.webp']
-    },
-    multiple: true,
-    disabled: isUploading
-  })
-
-  // Upload single image
-  const uploadImage = async (image: UploadingImage) => {
+  // Upload single image - moved outside to access current state
+  const uploadImage = useCallback(async (image: UploadingImage) => {
     try {
       // Update status to uploading
       setUploadingImages(prev =>
@@ -104,10 +79,21 @@ export default function AdminImageUpload() {
         console.error("Error fetching default gallery:", error)
       }
 
-      // Prepare form data
+      // Prepare form data - USE CURRENT STATE VALUES
       const formData = new FormData()
       formData.append('file', image.file)
-      formData.append('year', new Date().getFullYear().toString())
+      formData.append('year', selectedYear.toString())
+      formData.append('month', selectedMonth.toString())
+      
+      // Debug: Log what we're sending
+      console.log(`📤 Uploading image with date: Year=${selectedYear}, Month=${selectedMonth}`)
+      const selectedDate = new Date(Date.UTC(selectedYear, selectedMonth - 1, 1, 12, 0, 0))
+      console.log(`📤 Constructed date: ${selectedDate.toISOString()}`)
+      
+      // Create a date string in ISO format for the selected year/month (first day of the month, UTC)
+      // Use UTC to avoid timezone issues
+      formData.append('date', selectedDate.toISOString())
+      formData.append('published', publishImmediately ? 'true' : 'false')
       formData.append('alt', image.fileName.split('.')[0].replace(/[_-]/g, ' '))
       formData.append('title', image.fileName.split('.')[0].replace(/[_-]/g, ' '))
       if (defaultGalleryId) {
@@ -179,7 +165,37 @@ export default function AdminImageUpload() {
         return prev
       })
     }
-  }
+  }, [selectedYear, selectedMonth, publishImmediately, router])
+
+  // Dropzone configuration
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+    // Create uploading images
+    const newImages: UploadingImage[] = acceptedFiles.map(file => ({
+      id: Math.random().toString(36).substr(2, 9),
+      file,
+      preview: URL.createObjectURL(file),
+      fileName: file.name,
+      fileSize: formatFileSize(file.size),
+      status: 'analyzing' as const
+    }))
+
+    setUploadingImages(prev => [...prev, ...newImages])
+    setIsUploading(true)
+
+    // Start uploading each image
+    for (const image of newImages) {
+      await uploadImage(image)
+    }
+  }, [uploadImage])
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'image/*': ['.jpeg', '.jpg', '.png', '.webp']
+    },
+    multiple: true,
+    disabled: isUploading
+  })
 
   // Remove image from queue
   const removeImage = (id: string) => {
@@ -217,6 +233,75 @@ export default function AdminImageUpload() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
           Upload
         </h1>
+      </div>
+
+      {/* Date Selector for Album Creation - Prominent Section */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap">
+              Album Date (Year & Month):
+            </label>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              (Select when photos were taken)
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <select
+              value={selectedMonth}
+              onChange={(e) => {
+                const newMonth = parseInt(e.target.value)
+                console.log(`📅 Month changed: ${selectedMonth} -> ${newMonth}`)
+                setSelectedMonth(newMonth)
+              }}
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-pink-500 min-w-[140px]"
+              disabled={isUploading}
+            >
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => {
+                const date = new Date(2000, month - 1, 1)
+                return (
+                  <option key={month} value={month}>
+                    {date.toLocaleString('default', { month: 'long' })}
+                  </option>
+                )
+              })}
+            </select>
+            <select
+              value={selectedYear}
+              onChange={(e) => {
+                const newYear = parseInt(e.target.value)
+                console.log(`📅 Year changed: ${selectedYear} -> ${newYear}`)
+                setSelectedYear(newYear)
+              }}
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-pink-500 min-w-[100px]"
+              disabled={isUploading}
+            >
+              {Array.from({ length: 50 }, (_, i) => new Date().getFullYear() - i).map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+          <input
+            type="checkbox"
+            id="publishImmediately"
+            checked={publishImmediately}
+            onChange={(e) => setPublishImmediately(e.target.checked)}
+            disabled={isUploading}
+            className="w-4 h-4 text-pink-600 border-gray-300 rounded focus:ring-pink-500"
+          />
+          <label htmlFor="publishImmediately" className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+            Publish images immediately (appear on gallery site)
+          </label>
+        </div>
+        {!publishImmediately && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-2 rounded">
+            ℹ️ Images will be saved as drafts. Go to "Manage Images" to publish them and make them visible on the gallery.
+          </p>
+        )}
       </div>
 
       {/* Drag & Drop Zone */}

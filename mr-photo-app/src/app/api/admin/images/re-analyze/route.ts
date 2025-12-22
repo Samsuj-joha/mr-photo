@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { analyzeImageBuffer, getAllCategories } from "@/lib/imageAnalysis"
+import { analyzeImageBuffer } from "@/lib/imageAnalysis"
 
 export async function POST(request: NextRequest) {
   try {
@@ -41,9 +41,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Fetch categories from database
-    const customCategories = await getAllCategories()
-    console.log(`✅ Loaded ${customCategories.length} categories from database`)
+    // Note: We now use dynamic label-based categories, no need to fetch predefined categories
 
     // Get API keys from database settings
     let clarifaiApiKey: string | null = null
@@ -128,23 +126,23 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(arrayBuffer)
     const mimeType = imageResponse.headers.get('content-type') || 'image/jpeg'
 
-    // Analyze image
+    // Analyze image (now uses dynamic label-based categories)
     const analysisResult = await analyzeImageBuffer(
       buffer,
       mimeType,
       provider,
-      apiKey,
-      customCategories
+      apiKey
     )
 
     console.log(`✅ Analysis complete. Suggested category: ${analysisResult.suggestedCategory}`)
     console.log(`📊 Top matches:`, analysisResult.suggestedCategoryMatches.slice(0, 5))
-    console.log(`📊 Multiple categories (raw):`, analysisResult.suggestedCategories)
+    console.log(`📊 Multiple categories (top 4-5):`, analysisResult.suggestedCategories)
     console.log(`📊 Number of categories found:`, analysisResult.suggestedCategories?.length || 1)
+    console.log(`📊 Total available labels:`, analysisResult.allAvailableLabels?.length || 0)
 
-    // Save multiple categories as comma-separated (up to 5 categories)
+    // Save top 4-5 categories (highest confidence labels) as comma-separated
     const categoriesToSave = analysisResult.suggestedCategories && analysisResult.suggestedCategories.length > 0
-      ? analysisResult.suggestedCategories.slice(0, 5).join(", ")
+      ? analysisResult.suggestedCategories.join(", ")
       : analysisResult.suggestedCategory
     
     console.log(`💾 Saving categories: "${categoriesToSave}"`)
@@ -167,8 +165,12 @@ export async function POST(request: NextRequest) {
         suggestedCategories: analysisResult.suggestedCategories,
         confidence: analysisResult.labels[0]?.confidence || 0.8,
         description: analysisResult.description,
-        topMatches: analysisResult.suggestedCategoryMatches.slice(0, 5),
+        topMatches: analysisResult.suggestedCategoryMatches.slice(0, 10),
         labels: analysisResult.labels.slice(0, 10),
+        allAvailableLabels: analysisResult.allAvailableLabels || [],
+        remainingLabels: analysisResult.allAvailableLabels 
+          ? analysisResult.allAvailableLabels.slice((analysisResult.suggestedCategories?.length || 1))
+          : [],
         provider
       }
     })
