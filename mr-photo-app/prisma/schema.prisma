@@ -78,6 +78,7 @@ model GalleryImage {
   loves     Int      @default(0) // Loves field for heart icon counting
   year      Int? // Auto-extracted year from upload date for filtering
   category  String? // Auto-detected category: Birds, Animal, Ocean, Nature, Peace in Mind, Others
+  aiLabels  Json? // Store AI-detected labels with confidence scores as JSON
   published Boolean  @default(false) // Draft status by default, must be published to appear on gallery
   galleryId String
   gallery   Gallery  @relation(fields: [galleryId], references: [id], onDelete: Cascade)

@@ -11,10 +11,17 @@ async function getSliderImages() {
       orderBy: { order: "asc" }
     })
     
-    // Return all active images - let the browser handle image loading errors
-    // The HomeSlider component has built-in error handling for failed images
-    // This ensures all images are shown, even if validation has issues
-    return images
+    // Map database records to component format
+    // Ensure imageUrl field is properly mapped
+    return images.map(image => ({
+      id: image.id,
+      title: image.title || undefined,
+      description: image.description || undefined,
+      imageUrl: image.imageUrl, // Ensure this field is correctly mapped
+      alt: image.alt || undefined,
+      linkUrl: image.linkUrl || undefined,
+      linkText: image.linkText || undefined,
+    }))
   } catch (error) {
     console.error("Error fetching slider images:", error)
     return []

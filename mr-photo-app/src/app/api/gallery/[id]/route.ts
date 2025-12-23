@@ -34,6 +34,7 @@ export async function GET(
             loves: true,
             year: true,
             category: true,
+            aiLabels: true, // Include AI labels for instant display
             published: true,
             createdAt: true, // Explicitly select createdAt
             galleryId: true

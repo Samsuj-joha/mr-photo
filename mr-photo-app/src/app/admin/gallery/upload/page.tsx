@@ -9,12 +9,14 @@ import {
   X, 
   Camera,
   Loader2,
-  Edit
+  Edit,
+  Calendar
 } from "lucide-react"
 import Image from "next/image"
 import { useDropzone } from "react-dropzone"
 import { toast } from "sonner"
 import { ImageEditModal } from "@/components/admin/gallery/ImageEditModal"
+import exifr from 'exifr'
 
 interface UploadingImage {
   id: string
@@ -45,6 +47,8 @@ export default function AdminImageUpload() {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1)
   const [publishImmediately, setPublishImmediately] = useState<boolean>(false)
+  const [isAutoDate, setIsAutoDate] = useState<boolean>(false) // Track if date was auto-detected
+  const [extractingDates, setExtractingDates] = useState<boolean>(false)
 
   // Format file size
   const formatFileSize = (bytes: number) => {
@@ -79,20 +83,35 @@ export default function AdminImageUpload() {
         console.error("Error fetching default gallery:", error)
       }
 
-      // Prepare form data - USE CURRENT STATE VALUES
+      // Try to extract EXIF date from this specific image
+      let imageDate: Date | null = null
+      try {
+        imageDate = await extractExifDate(image.file)
+      } catch (error) {
+        console.log('Could not extract EXIF date for individual image:', error)
+      }
+
+      // Use EXIF date if available, otherwise use selected date
+      let uploadYear = selectedYear
+      let uploadMonth = selectedMonth
+      let uploadDate: Date
+
+      if (imageDate) {
+        uploadYear = imageDate.getFullYear()
+        uploadMonth = imageDate.getMonth() + 1
+        uploadDate = new Date(Date.UTC(uploadYear, uploadMonth - 1, imageDate.getDate(), 12, 0, 0))
+        console.log(`📸 Using EXIF date from image: ${uploadDate.toISOString()}`)
+      } else {
+        uploadDate = new Date(Date.UTC(selectedYear, selectedMonth - 1, 1, 12, 0, 0))
+        console.log(`📤 Using selected date: ${uploadDate.toISOString()}`)
+      }
+
+      // Prepare form data
       const formData = new FormData()
       formData.append('file', image.file)
-      formData.append('year', selectedYear.toString())
-      formData.append('month', selectedMonth.toString())
-      
-      // Debug: Log what we're sending
-      console.log(`📤 Uploading image with date: Year=${selectedYear}, Month=${selectedMonth}`)
-      const selectedDate = new Date(Date.UTC(selectedYear, selectedMonth - 1, 1, 12, 0, 0))
-      console.log(`📤 Constructed date: ${selectedDate.toISOString()}`)
-      
-      // Create a date string in ISO format for the selected year/month (first day of the month, UTC)
-      // Use UTC to avoid timezone issues
-      formData.append('date', selectedDate.toISOString())
+      formData.append('year', uploadYear.toString())
+      formData.append('month', uploadMonth.toString())
+      formData.append('date', uploadDate.toISOString())
       formData.append('published', publishImmediately ? 'true' : 'false')
       formData.append('alt', image.fileName.split('.')[0].replace(/[_-]/g, ' '))
       formData.append('title', image.fileName.split('.')[0].replace(/[_-]/g, ' '))
@@ -167,8 +186,71 @@ export default function AdminImageUpload() {
     }
   }, [selectedYear, selectedMonth, publishImmediately, router])
 
+  // Extract EXIF date from image file
+  const extractExifDate = async (file: File): Promise<Date | null> => {
+    try {
+      // Extract EXIF data - focus on DateTimeOriginal (when photo was taken)
+      const exifData = await exifr.parse(file, {
+        pick: ['DateTimeOriginal', 'CreateDate', 'ModifyDate']
+      })
+      
+      if (exifData?.DateTimeOriginal) {
+        const date = new Date(exifData.DateTimeOriginal)
+        if (!isNaN(date.getTime())) {
+          return date
+        }
+      }
+      
+      // Fallback to CreateDate
+      if (exifData?.CreateDate) {
+        const date = new Date(exifData.CreateDate)
+        if (!isNaN(date.getTime())) {
+          return date
+        }
+      }
+      
+      return null
+    } catch (error) {
+      console.log('Could not extract EXIF date:', error)
+      return null
+    }
+  }
+
   // Dropzone configuration
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
+    setExtractingDates(true)
+    
+    // Try to extract date from first image (use it for all images in batch)
+    let detectedDate: Date | null = null
+    if (acceptedFiles.length > 0) {
+      try {
+        detectedDate = await extractExifDate(acceptedFiles[0])
+        if (detectedDate) {
+          const year = detectedDate.getFullYear()
+          const month = detectedDate.getMonth() + 1
+          
+          // Validate date is reasonable (not in future, not too old)
+          const currentYear = new Date().getFullYear()
+          if (year >= 1990 && year <= currentYear + 1) {
+            setSelectedYear(year)
+            setSelectedMonth(month)
+            setIsAutoDate(true)
+            toast.success(`Auto-detected date: ${detectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`)
+          } else {
+            console.log(`Date ${year} is out of reasonable range, using manual selection`)
+            setIsAutoDate(false)
+          }
+        } else {
+          setIsAutoDate(false)
+        }
+      } catch (error) {
+        console.error('Error extracting EXIF date:', error)
+        setIsAutoDate(false)
+      }
+    }
+    
+    setExtractingDates(false)
+
     // Create uploading images
     const newImages: UploadingImage[] = acceptedFiles.map(file => ({
       id: Math.random().toString(36).substr(2, 9),
@@ -242,9 +324,23 @@ export default function AdminImageUpload() {
             <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap">
               Album Date (Year & Month):
             </label>
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              (Select when photos were taken)
-            </span>
+            {isAutoDate && (
+              <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+                <Calendar className="h-3 w-3" />
+                Auto-detected from image
+              </span>
+            )}
+            {!isAutoDate && !extractingDates && (
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                (Select manually or upload image to auto-detect)
+              </span>
+            )}
+            {extractingDates && (
+              <span className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Extracting date...
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <select
@@ -253,9 +349,10 @@ export default function AdminImageUpload() {
                 const newMonth = parseInt(e.target.value)
                 console.log(`📅 Month changed: ${selectedMonth} -> ${newMonth}`)
                 setSelectedMonth(newMonth)
+                setIsAutoDate(false) // User manually changed, disable auto flag
               }}
               className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-pink-500 min-w-[140px]"
-              disabled={isUploading}
+              disabled={isUploading || extractingDates}
             >
               {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => {
                 const date = new Date(2000, month - 1, 1)
@@ -272,9 +369,10 @@ export default function AdminImageUpload() {
                 const newYear = parseInt(e.target.value)
                 console.log(`📅 Year changed: ${selectedYear} -> ${newYear}`)
                 setSelectedYear(newYear)
+                setIsAutoDate(false) // User manually changed, disable auto flag
               }}
               className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-pink-500 min-w-[100px]"
-              disabled={isUploading}
+              disabled={isUploading || extractingDates}
             >
               {Array.from({ length: 50 }, (_, i) => new Date().getFullYear() - i).map((year) => (
                 <option key={year} value={year}>

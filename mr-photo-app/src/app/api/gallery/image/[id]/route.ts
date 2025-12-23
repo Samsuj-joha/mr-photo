@@ -35,89 +35,106 @@ export async function GET(
       )
     }
 
-    // Try to get AI labels if available (optional - don't fail if analysis fails)
+    // Get AI labels from database first (stored during upload for instant retrieval)
     let aiLabels: { label: string; confidence: number }[] = []
-    try {
-      // Get API keys for analysis
-      const customCategories = await getAllCategories()
-      let clarifaiApiKey: string | null = null
-      let googleApiKey: string | null = null
-      let azureConfig: string | null = null
-      let activeProvider = "clarifai"
-
+    if (image.aiLabels) {
       try {
-        const providerSetting = await db.settings.findUnique({
-          where: { key: "image_analysis_provider" }
-        })
-        activeProvider = providerSetting?.value || process.env.IMAGE_ANALYSIS_PROVIDER || "clarifai"
-
-        const clarifaiSetting = await db.settings.findUnique({
-          where: { key: "clarifai_api_key" }
-        })
-        clarifaiApiKey = clarifaiSetting?.value || process.env.CLARIFAI_API_KEY || null
-
-        const googleSetting = await db.settings.findUnique({
-          where: { key: "google_vision_api_key" }
-        })
-        googleApiKey = googleSetting?.value || process.env.GOOGLE_VISION_API_KEY || null
-
-        const azureEndpointSetting = await db.settings.findUnique({
-          where: { key: "azure_computer_vision_endpoint" }
-        })
-        const azureKeySetting = await db.settings.findUnique({
-          where: { key: "azure_computer_vision_key" }
-        })
-        if (azureEndpointSetting?.value && azureKeySetting?.value) {
-          azureConfig = `${azureEndpointSetting.value}|${azureKeySetting.value}`
+        // Parse stored JSON labels
+        const storedLabels = typeof image.aiLabels === 'string' 
+          ? JSON.parse(image.aiLabels) 
+          : image.aiLabels
+        if (Array.isArray(storedLabels)) {
+          aiLabels = storedLabels
         }
       } catch (error) {
-        // Use env vars as fallback
-        clarifaiApiKey = process.env.CLARIFAI_API_KEY || null
-        googleApiKey = process.env.GOOGLE_VISION_API_KEY || null
+        console.log("Could not parse stored AI labels:", error)
       }
+    }
 
-      let apiKey: string | undefined
-      let provider: string = activeProvider
+    // Only re-analyze if no labels are stored (for backward compatibility with old images)
+    if (aiLabels.length === 0) {
+      try {
+        // Get API keys for analysis
+        const customCategories = await getAllCategories()
+        let clarifaiApiKey: string | null = null
+        let googleApiKey: string | null = null
+        let azureConfig: string | null = null
+        let activeProvider = "clarifai"
 
-      if (activeProvider === "clarifai" && clarifaiApiKey) {
-        apiKey = clarifaiApiKey
-      } else if (activeProvider === "google" && googleApiKey) {
-        apiKey = googleApiKey
-      } else if (activeProvider === "azure" && azureConfig) {
-        apiKey = azureConfig
-      } else if (clarifaiApiKey) {
-        apiKey = clarifaiApiKey
-        provider = "clarifai"
-      } else if (googleApiKey) {
-        apiKey = googleApiKey
-        provider = "google"
-      } else if (azureConfig) {
-        apiKey = azureConfig
-        provider = "azure"
-      }
+        try {
+          const providerSetting = await db.settings.findUnique({
+            where: { key: "image_analysis_provider" }
+          })
+          activeProvider = providerSetting?.value || process.env.IMAGE_ANALYSIS_PROVIDER || "clarifai"
 
-      // Only analyze if API key is available
-      if (apiKey) {
-        const imageResponse = await fetch(image.url)
-        if (imageResponse.ok) {
-          const arrayBuffer = await imageResponse.arrayBuffer()
-          const buffer = Buffer.from(arrayBuffer)
-          const mimeType = imageResponse.headers.get('content-type') || 'image/jpeg'
-          
-          const analysisResult = await analyzeImageBuffer(
-            buffer,
-            mimeType,
-            provider,
-            apiKey,
-            customCategories
-          )
-          
-          aiLabels = analysisResult.labels || []
+          const clarifaiSetting = await db.settings.findUnique({
+            where: { key: "clarifai_api_key" }
+          })
+          clarifaiApiKey = clarifaiSetting?.value || process.env.CLARIFAI_API_KEY || null
+
+          const googleSetting = await db.settings.findUnique({
+            where: { key: "google_vision_api_key" }
+          })
+          googleApiKey = googleSetting?.value || process.env.GOOGLE_VISION_API_KEY || null
+
+          const azureEndpointSetting = await db.settings.findUnique({
+            where: { key: "azure_computer_vision_endpoint" }
+          })
+          const azureKeySetting = await db.settings.findUnique({
+            where: { key: "azure_computer_vision_key" }
+          })
+          if (azureEndpointSetting?.value && azureKeySetting?.value) {
+            azureConfig = `${azureEndpointSetting.value}|${azureKeySetting.value}`
+          }
+        } catch (error) {
+          // Use env vars as fallback
+          clarifaiApiKey = process.env.CLARIFAI_API_KEY || null
+          googleApiKey = process.env.GOOGLE_VISION_API_KEY || null
         }
+
+        let apiKey: string | undefined
+        let provider: string = activeProvider
+
+        if (activeProvider === "clarifai" && clarifaiApiKey) {
+          apiKey = clarifaiApiKey
+        } else if (activeProvider === "google" && googleApiKey) {
+          apiKey = googleApiKey
+        } else if (activeProvider === "azure" && azureConfig) {
+          apiKey = azureConfig
+        } else if (clarifaiApiKey) {
+          apiKey = clarifaiApiKey
+          provider = "clarifai"
+        } else if (googleApiKey) {
+          apiKey = googleApiKey
+          provider = "google"
+        } else if (azureConfig) {
+          apiKey = azureConfig
+          provider = "azure"
+        }
+
+        // Only analyze if API key is available
+        if (apiKey) {
+          const imageResponse = await fetch(image.url)
+          if (imageResponse.ok) {
+            const arrayBuffer = await imageResponse.arrayBuffer()
+            const buffer = Buffer.from(arrayBuffer)
+            const mimeType = imageResponse.headers.get('content-type') || 'image/jpeg'
+            
+            const analysisResult = await analyzeImageBuffer(
+              buffer,
+              mimeType,
+              provider,
+              apiKey,
+              customCategories
+            )
+            
+            aiLabels = analysisResult.labels || []
+          }
+        }
+      } catch (error) {
+        // Silently fail - labels are optional
+        console.log("Could not fetch AI labels:", error)
       }
-    } catch (error) {
-      // Silently fail - labels are optional
-      console.log("Could not fetch AI labels:", error)
     }
 
     return NextResponse.json({

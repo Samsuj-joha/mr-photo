@@ -47,6 +47,7 @@ interface GalleryImage {
   order: number
   year?: number
   category?: string
+  aiLabels?: { label: string; confidence: number }[] | string | null // AI-detected labels (can be JSON string or array)
   published?: boolean // Image publish status (draft by default)
   createdAt: string
   galleryId: string
@@ -184,6 +185,24 @@ export default function GalleryManagePage() {
   // Fetch AI labels for selected image
   const fetchAiLabels = async (imageId: string) => {
     if (!imageId) return
+    
+    // Check if the image already has labels in the images array (from initial fetch)
+    const imageFromList = images.find(img => img.id === imageId)
+    if (imageFromList && (imageFromList as any).aiLabels) {
+      try {
+        const storedLabels = typeof (imageFromList as any).aiLabels === 'string' 
+          ? JSON.parse((imageFromList as any).aiLabels) 
+          : (imageFromList as any).aiLabels
+        if (Array.isArray(storedLabels) && storedLabels.length > 0) {
+          setAiLabels(storedLabels)
+          return // Use stored labels immediately, no API call needed
+        }
+      } catch (error) {
+        console.log('Could not parse stored labels from image object:', error)
+      }
+    }
+    
+    // Only fetch from API if labels not available in image object
     setLoadingLabels(true)
     try {
       const response = await fetch(`/api/gallery/image/${imageId}`)
@@ -562,34 +581,37 @@ export default function GalleryManagePage() {
 
   // Toggle publish status
   const togglePublish = async (image: GalleryImage) => {
-    try {
-      const newPublishedStatus = !image.published
-      const response = await fetch(`/api/gallery/images/${image.id}/publish`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ published: newPublishedStatus })
-      })
+    const newPublishedStatus = !image.published
+    
+    // Optimistically update UI immediately for instant feedback
+    setImages(prev => prev.map(img => 
+      img.id === image.id ? { ...img, published: newPublishedStatus } : img
+    ))
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to update publish status')
-      }
-
-      // Update local state
-      setImages(prev => prev.map(img => 
-        img.id === image.id ? { ...img, published: newPublishedStatus } : img
-      ))
-
-      // Update selected image if it's the one being toggled
-      if (selectedImage?.id === image.id) {
-        setSelectedImage({ ...selectedImage, published: newPublishedStatus })
-      }
-
-      toast.success(newPublishedStatus ? 'Image published successfully!' : 'Image unpublished (draft)')
-    } catch (error) {
-      console.error('Error toggling publish:', error)
-      toast.error(error instanceof Error ? error.message : 'Failed to update publish status')
+    // Update selected image if it's the one being toggled
+    if (selectedImage?.id === image.id) {
+      setSelectedImage({ ...selectedImage, published: newPublishedStatus })
     }
+
+    // Show success toast immediately
+    toast.success(newPublishedStatus ? 'Image published successfully!' : 'Image unpublished (draft)')
+
+    // Update in background (don't wait for response)
+    fetch(`/api/gallery/images/${image.id}/publish`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ published: newPublishedStatus })
+    }).catch(error => {
+      // Revert on error
+      setImages(prev => prev.map(img => 
+        img.id === image.id ? { ...img, published: image.published } : img
+      ))
+      if (selectedImage?.id === image.id) {
+        setSelectedImage({ ...selectedImage, published: image.published })
+      }
+      console.error('Error toggling publish:', error)
+      toast.error('Failed to update publish status. Please try again.')
+    })
   }
 
   // Add new category
@@ -926,7 +948,23 @@ export default function GalleryManagePage() {
                             // Set image immediately for instant response
                             setSelectedImage(img)
                             setIsEditView(false)
-                            // Fetch AI labels asynchronously without blocking
+                            
+                            // Check if labels are already available in the image object
+                            if ((img as any).aiLabels) {
+                              try {
+                                const storedLabels = typeof (img as any).aiLabels === 'string' 
+                                  ? JSON.parse((img as any).aiLabels) 
+                                  : (img as any).aiLabels
+                                if (Array.isArray(storedLabels) && storedLabels.length > 0) {
+                                  setAiLabels(storedLabels) // Set immediately - instant display!
+                                  return // No need to fetch
+                                }
+                              } catch (error) {
+                                console.log('Could not parse stored labels:', error)
+                              }
+                            }
+                            
+                            // Only fetch if labels not available
                             fetchAiLabels(img.id).catch(() => {})
                           }}
                         >

@@ -833,6 +833,7 @@ export async function POST(request: NextRequest) {
       
       // Step 6: Auto-categorize image using AI (with multiple categories support)
       let detectedCategory = "Others"
+      let aiLabels: { label: string; confidence: number }[] = []
       try {
         console.log("🤖 Detecting category for image...")
         
@@ -862,9 +863,16 @@ export async function POST(request: NextRequest) {
             // Fallback to single category
             detectedCategory = categoryData.category || "Others"
           }
+          
+          // Store AI labels for instant retrieval later
+          if (categoryData.allAvailableLabels && Array.isArray(categoryData.allAvailableLabels)) {
+            // Labels are already in the correct format: { label: string; confidence: number }[]
+            aiLabels = categoryData.allAvailableLabels
+          }
+          
           const method = categoryData.method || "unknown"
           console.log(`✅ Category detected: ${detectedCategory} (method: ${method}, confidence: ${categoryData.confidence || 'N/A'})`)
-          console.log(`📊 Available labels: ${categoryData.allAvailableLabels?.length || 0} (top ${categoryData.categories?.length || 0} selected)`)
+          console.log(`📊 Available labels: ${aiLabels.length} (top ${categoryData.categories?.length || 0} selected)`)
           
           // Warn if using fallback method (but only once to reduce log noise)
           if (method.includes("filename") || method.includes("fallback")) {
@@ -973,6 +981,7 @@ export async function POST(request: NextRequest) {
           galleryId: galleryId,
           year: uploadYear,
           category: detectedCategory,
+          aiLabels: aiLabels.length > 0 ? aiLabels : null, // Store AI labels for instant retrieval
           published: published, // Use provided publish status or default to false
           createdAt: createdAtDate, // Set custom date for album grouping
         }
