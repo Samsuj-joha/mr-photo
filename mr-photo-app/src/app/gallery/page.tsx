@@ -48,6 +48,7 @@ export default function GalleryPage() {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [selectedAlbum, setSelectedAlbum] = useState<string | null>(null)
 
   // Fetch images with pagination - load more as needed
   const fetchImages = useCallback(async () => {
@@ -91,18 +92,44 @@ export default function GalleryPage() {
     fetchImages()
   }, [fetchImages])
 
+  // Scroll to top when category or album is selected
+  useEffect(() => {
+    if (selectedCategory || selectedAlbum) {
+      // Use requestAnimationFrame to ensure DOM is updated
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      })
+    }
+  }, [selectedCategory, selectedAlbum])
+
   // Filter images by selected category
   const filteredImages = useMemo(() => {
-    if (!selectedCategory) return images
+    let filtered = images
     
-    return images.filter(image => {
-      if (!image.category) return false
-      // Handle comma-separated categories
-      const categories = image.category.split(',').map(c => c.trim().toLowerCase())
-      const normalizedSelected = normalizeCategory(selectedCategory.toLowerCase())
-      return categories.some(cat => normalizeCategory(cat) === normalizedSelected)
-    })
-  }, [images, selectedCategory])
+    // Filter by category if selected
+    if (selectedCategory) {
+      filtered = filtered.filter(image => {
+        if (!image.category) return false
+        // Handle comma-separated categories
+        const categories = image.category.split(',').map(c => c.trim().toLowerCase())
+        const normalizedSelected = normalizeCategory(selectedCategory.toLowerCase())
+        return categories.some(cat => normalizeCategory(cat) === normalizedSelected)
+      })
+    }
+    
+    // Filter by album (year/month) if selected
+    if (selectedAlbum) {
+      filtered = filtered.filter(image => {
+        const date = image.createdAt ? new Date(image.createdAt) : (image.year ? new Date(image.year, 0, 1) : new Date())
+        const year = date.getFullYear()
+        const month = date.toLocaleString('default', { month: 'long' })
+        const key = `${month} ${year}`
+        return key === selectedAlbum
+      })
+    }
+    
+    return filtered
+  }, [images, selectedCategory, selectedAlbum])
 
   // Group images by year/month for albums (iPhone-style)
   const albumsByYearMonth = useMemo(() => {
@@ -171,15 +198,20 @@ export default function GalleryPage() {
     return sortedCategories
   }, [images])
 
-  // Flatten all images for modal navigation (use filtered images when category is selected)
+  // Flatten all images for modal navigation (use filtered images when category or album is selected)
   const allImagesForModal = useMemo(() => {
     return filteredImages
   }, [filteredImages])
 
   const handleCategoryClick = (category: string) => {
-    setSelectedCategory(category === selectedCategory ? null : category)
-    // Scroll to top when category is selected
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    const newCategory = category === selectedCategory ? null : category
+    setSelectedCategory(newCategory)
+    setSelectedAlbum(null) // Clear album selection when category is selected
+  }
+
+  const handleAlbumClick = (albumKey: string, albumImages: GalleryImage[]) => {
+    setSelectedAlbum(albumKey === selectedAlbum ? null : albumKey)
+    setSelectedCategory(null) // Clear category selection when album is selected
   }
 
   const handleImageClick = (imageId: string) => {
@@ -205,7 +237,7 @@ export default function GalleryPage() {
         ) : (
           <div className="space-y-12">
             {/* Albums by Year/Month (iPhone-style) */}
-            {!selectedCategory && Object.keys(albumsByYearMonth).length > 0 && (
+            {!selectedCategory && !selectedAlbum && Object.keys(albumsByYearMonth).length > 0 && (
               <div>
                 <h2 className="text-3xl font-bold mb-6">Albums</h2>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -217,9 +249,8 @@ export default function GalleryPage() {
                         key={yearMonth}
                         className="group cursor-pointer"
                         onClick={() => {
-                          // Scroll to this album's images or show in modal
-                          const firstImageId = albumImages[0].id
-                          handleImageClick(firstImageId)
+                          // Select this album to show only its images
+                          handleAlbumClick(yearMonth, albumImages)
                         }}
                       >
                         <div className="relative aspect-square rounded-lg overflow-hidden bg-gray-50 mb-2 shadow-md group-hover:shadow-xl transition-shadow">
@@ -277,8 +308,47 @@ export default function GalleryPage() {
               </div>
             )}
 
+            {/* Selected Album Images */}
+            {selectedAlbum && (
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <button
+                      onClick={() => setSelectedAlbum(null)}
+                      className="text-gray-500 hover:text-gray-700 mb-2 flex items-center gap-2"
+                    >
+                      ← Back to Albums
+                    </button>
+                    <h2 className="text-3xl font-bold">
+                      {selectedAlbum} <span className="text-gray-500 text-xl font-normal">({filteredImages.length})</span>
+                    </h2>
+                  </div>
+                </div>
+                <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4">
+                  {filteredImages.map((image, index) => (
+                    <div
+                      key={`${selectedAlbum}-${image.id}-${index}`}
+                      className="group break-inside-avoid rounded-lg overflow-hidden cursor-pointer transition-all mb-4"
+                      onClick={() => handleImageClick(image.id)}
+                    >
+                      <div className="relative overflow-hidden bg-gray-100 aspect-auto">
+                        <Image
+                          src={image.imageUrl}
+                          alt={image.title}
+                          width={400}
+                          height={300}
+                          className="w-full h-auto object-cover group-hover:scale-105 transition-transform duration-300"
+                          unoptimized={image.imageUrl.includes('cloudinary.com')}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Categories as Albums */}
-            {!selectedCategory && Object.keys(imagesByCategory).length > 0 && (
+            {!selectedCategory && !selectedAlbum && Object.keys(imagesByCategory).length > 0 && (
               <div>
                 <h2 className="text-3xl font-bold mb-6">Categories</h2>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -349,7 +419,7 @@ export default function GalleryPage() {
 
             {/* Selected Category Images */}
             {selectedCategory && (
-              <div>
+              <div id="category-images">
                 <div className="flex items-center justify-between mb-6">
                   <div>
                     <button
