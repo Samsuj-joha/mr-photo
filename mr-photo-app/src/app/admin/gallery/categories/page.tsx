@@ -12,7 +12,7 @@ export default function ManageCategoriesPage() {
   const [categories, setCategories] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState("")
-  const [categoryStats, setCategoryStats] = useState<Record<string, { images: number; galleries: number }>>({})
+  const [categoryStats, setCategoryStats] = useState<Record<string, { images: number; galleries: number; portfolios: number }>>({})
 
   // Fetch all categories
   const fetchCategories = async () => {
@@ -46,7 +46,12 @@ export default function ManageCategoriesPage() {
   // Fetch stats for each category
   const fetchCategoryStats = async (cats: string[]) => {
     try {
-      const stats: Record<string, { images: number; galleries: number }> = {}
+      const stats: Record<string, { images: number; galleries: number; portfolios: number }> = {}
+      
+      // Initialize all categories with zero counts
+      cats.forEach(cat => {
+        stats[cat] = { images: 0, galleries: 0, portfolios: 0 }
+      })
       
       // Fetch all images to count by category
       const imagesResponse = await fetch(`/api/gallery/images?limit=10000`)
@@ -63,10 +68,45 @@ export default function ManageCategoriesPage() {
             return categories.includes(cat.toLowerCase())
           }).length
           
-          stats[cat] = {
-            images: count,
-            galleries: 0
-          }
+          stats[cat].images = count
+        })
+      }
+      
+      // Fetch all galleries to count by category
+      const galleriesResponse = await fetch(`/api/gallery`)
+      if (galleriesResponse.ok) {
+        const galleriesData = await galleriesResponse.json()
+        const allGalleries = galleriesData.galleries || galleriesData || []
+        
+        // Count galleries for each category
+        cats.forEach(cat => {
+          const count = allGalleries.filter((gallery: any) => {
+            if (!gallery.category) return false
+            // Handle comma-separated categories
+            const categories = gallery.category.split(',').map((c: string) => c.trim().toLowerCase())
+            return categories.includes(cat.toLowerCase())
+          }).length
+          
+          stats[cat].galleries = count
+        })
+      }
+      
+      // Fetch all portfolios to count by category
+      const portfoliosResponse = await fetch(`/api/portfolios`)
+      if (portfoliosResponse.ok) {
+        const portfoliosData = await portfoliosResponse.json()
+        const allPortfolios = portfoliosData.portfolios || portfoliosData || []
+        
+        // Count portfolios for each category
+        cats.forEach(cat => {
+          const count = allPortfolios.filter((portfolio: any) => {
+            if (!portfolio.category) return false
+            // Handle comma-separated categories
+            const categories = portfolio.category.split(',').map((c: string) => c.trim().toLowerCase())
+            return categories.includes(cat.toLowerCase())
+          }).length
+          
+          stats[cat].portfolios = count
         })
       }
       
@@ -140,7 +180,14 @@ export default function ManageCategoriesPage() {
 
   // Delete category
   const deleteCategory = async (category: string) => {
-    if (!confirm(`Are you sure you want to delete category "${category}"? This will only work if no galleries, images, or portfolios use it.`)) {
+    const stats = categoryStats[category] || { images: 0, galleries: 0, portfolios: 0 }
+    const totalCount = stats.images + stats.galleries + stats.portfolios
+    
+    const confirmMessage = totalCount > 0
+      ? `Are you sure you want to delete category "${category}"?\n\nThis will remove the category from:\n- ${stats.galleries} galleries\n- ${stats.images} images\n- ${stats.portfolios} portfolios\n\nThe category will be removed everywhere, including the main website.`
+      : `Are you sure you want to delete category "${category}"?\n\nThe category will be removed from everywhere, including the main website.`
+
+    if (!confirm(confirmMessage)) {
       return
     }
 
@@ -152,13 +199,19 @@ export default function ManageCategoriesPage() {
 
       const data = await response.json()
       if (response.ok && data.success) {
-        toast.success(`Category "${category}" removed successfully`)
+        const details = data.details || {}
+        const totalRemoved = (details.galleries || 0) + (details.images || 0) + (details.portfolios || 0)
+        
+        if (totalRemoved > 0) {
+          toast.success(
+            `Category "${category}" removed successfully from ${details.galleries || 0} galleries, ${details.images || 0} images, and ${details.portfolios || 0} portfolios`
+          )
+        } else {
+          toast.success(`Category "${category}" removed successfully`)
+        }
         await fetchCategories()
       } else {
         toast.error(data.error || data.message || 'Failed to delete category')
-        if (data.details) {
-          toast.info(`This category is used by ${data.details.images || 0} images and ${data.details.galleries || 0} galleries`)
-        }
       }
     } catch (error) {
       console.error('Error deleting category:', error)
@@ -254,8 +307,8 @@ export default function ManageCategoriesPage() {
           ) : (
             <div className="grid grid-cols-2 border-t border-l">
               {categories.map((category, index) => {
-                const stats = categoryStats[category] || { images: 0, galleries: 0 }
-                const totalCount = stats.images + stats.galleries
+                const stats = categoryStats[category] || { images: 0, galleries: 0, portfolios: 0 }
+                const totalCount = stats.images + stats.galleries + stats.portfolios
                 return (
                   <div
                     key={category}

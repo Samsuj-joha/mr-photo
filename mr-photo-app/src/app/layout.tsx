@@ -14,14 +14,21 @@ const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://mr-photography.com'),
-  title: 'MR-PHOTOGRAPHY - Professional Photography Portfolio',
+  title: 'mr-photos',
   description: 'Capturing life\'s precious moments through professional photography. Wedding, portrait, and event photography services.',
   keywords: 'photography, wedding photography, portrait photography, professional photographer, New York photographer',
   authors: [{ name: 'Michael Rodriguez' }],
   creator: 'MR Photography',
   publisher: 'MR Photography',
+  icons: {
+    icon: [
+      { url: '/images/logo.png', type: 'image/png' },
+    ],
+    shortcut: '/images/logo.png',
+    apple: '/images/logo.png',
+  },
   openGraph: {
-    title: 'MR-PHOTOGRAPHY - Professional Photography Portfolio',
+    title: 'mr-photos',
     description: 'Professional photographer specializing in weddings, portraits, and events. Creating timeless memories through beautiful imagery.',
     url: 'https://mr-photography.com',
     siteName: 'MR Photography',

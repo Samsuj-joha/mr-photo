@@ -250,7 +250,6 @@ import {
   Facebook, 
   Twitter, 
   Mail, 
-  Phone, 
   MapPin,
   Camera,
   Heart,
@@ -395,10 +394,6 @@ export function Footer() {
               
               {/* Contact Info */}
               <div className="space-y-3">
-                <div className="flex items-center space-x-3 text-sm text-muted-foreground">
-                  <Phone className="h-4 w-4" />
-                  <span>+88 02 9882107-8</span>
-                </div>
                 <div className="flex items-center space-x-3 text-sm text-muted-foreground">
                   <Mail className="h-4 w-4" />
                   <span>info@mr-photography.com</span>

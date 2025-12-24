@@ -217,7 +217,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE - Remove a category (only if no items use it)
+// DELETE - Remove a category from everywhere
 export async function DELETE(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -239,93 +239,119 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    const normalizedCategory = category.toLowerCase().trim()
+    const categoryToDelete = category.trim()
+    const normalizedCategory = categoryToDelete.toLowerCase().trim()
 
-    // Helper function to check if a category string contains the category (handles comma-separated)
-    const containsCategory = (categoryString: string | null): boolean => {
-      if (!categoryString) return false
-      const categories = categoryString.split(',').map(c => c.trim().toLowerCase())
-      return categories.includes(normalizedCategory)
+    // Helper function to normalize category for comparison
+    const normalizeCategory = (cat: string): string => {
+      return cat.trim().toLowerCase()
     }
 
-    // Check if category is used by any published galleries, images, or portfolios
-    // Get all records and check if they contain this category
+    // Helper function to remove category from comma-separated string
+    const removeCategoryFromString = (categoryString: string | null): string | null => {
+      if (!categoryString || categoryString.trim() === '') return null
+      
+      const categories = categoryString.split(',')
+        .map(c => c.trim())
+        .filter(c => c.length > 0)
+        .filter(c => normalizeCategory(c) !== normalizedCategory)
+      
+      if (categories.length === 0) return null
+      return categories.join(', ')
+    }
+
+    // Count items that will be affected
     const allGalleries = await db.gallery.findMany({
-      where: { 
-        published: true 
-      },
-      select: { category: true }
-    })
-
-    const allImages = await db.galleryImage.findMany({
-      select: { category: true }
-    })
-
-    const allPortfolios = await db.portfolio.findMany({
-      where: { 
-        published: true 
-      },
-      select: { category: true }
-    })
-
-    // Filter out null/empty categories in JavaScript
-    const galleriesWithCategory = allGalleries
-      .filter(g => g.category && g.category.trim() !== "")
-      .filter(g => containsCategory(g.category))
-      .length
-
-    const imagesWithCategory = allImages
-      .filter(img => img.category && img.category.trim() !== "")
-      .filter(img => containsCategory(img.category))
-      .length
-
-    const portfoliosWithCategory = allPortfolios
-      .filter(p => p.category && p.category.trim() !== "")
-      .filter(p => containsCategory(p.category))
-      .length
-
-    if (galleriesWithCategory > 0 || imagesWithCategory > 0 || portfoliosWithCategory > 0) {
-      return NextResponse.json(
-        { 
-          error: "Cannot delete category", 
-          message: `Category is used by ${galleriesWithCategory} galleries, ${imagesWithCategory} images, and ${portfoliosWithCategory} portfolios`,
-          details: {
-            galleries: galleriesWithCategory,
-            images: imagesWithCategory,
-            portfolios: portfoliosWithCategory
-          }
-        },
-        { status: 400 }
-      )
-    }
-
-    // Delete unpublished temporary galleries that contain this category (handles comma-separated)
-    const unpublishedGalleries = await db.gallery.findMany({
-      where: {
-        published: false
-      },
       select: { id: true, category: true }
     })
 
-    // Filter galleries that have this category (handles null/empty and comma-separated)
-    const galleriesToDelete = unpublishedGalleries
-      .filter(g => g.category && g.category.trim() !== "")
-      .filter(g => containsCategory(g.category))
+    const allImages = await db.galleryImage.findMany({
+      select: { id: true, category: true }
+    })
 
-    const deletedIds = galleriesToDelete.map(g => g.id)
+    const allPortfolios = await db.portfolio.findMany({
+      select: { id: true, category: true }
+    })
 
-    if (deletedIds.length > 0) {
+    // Helper to check if category exists in string
+    const containsCategory = (categoryString: string | null): boolean => {
+      if (!categoryString) return false
+      const categories = categoryString.split(',').map(c => normalizeCategory(c.trim()))
+      return categories.includes(normalizedCategory)
+    }
+
+    // Count affected items
+    const galleriesWithCategory = allGalleries.filter(g => containsCategory(g.category)).length
+    const imagesWithCategory = allImages.filter(img => containsCategory(img.category)).length
+    const portfoliosWithCategory = allPortfolios.filter(p => containsCategory(p.category)).length
+
+    // Remove category from all galleries
+    let galleriesUpdated = 0
+    for (const gallery of allGalleries) {
+      if (containsCategory(gallery.category)) {
+        const updatedCategory = removeCategoryFromString(gallery.category)
+        await db.gallery.update({
+          where: { id: gallery.id },
+          data: { category: updatedCategory }
+        })
+        galleriesUpdated++
+      }
+    }
+
+    // Remove category from all images
+    let imagesUpdated = 0
+    for (const image of allImages) {
+      if (containsCategory(image.category)) {
+        const updatedCategory = removeCategoryFromString(image.category)
+        await db.galleryImage.update({
+          where: { id: image.id },
+          data: { category: updatedCategory }
+        })
+        imagesUpdated++
+      }
+    }
+
+    // Remove category from all portfolios
+    let portfoliosUpdated = 0
+    for (const portfolio of allPortfolios) {
+      if (containsCategory(portfolio.category)) {
+        const updatedCategory = removeCategoryFromString(portfolio.category)
+        await db.portfolio.update({
+          where: { id: portfolio.id },
+          data: { category: updatedCategory }
+        })
+        portfoliosUpdated++
+      }
+    }
+
+    // Delete unpublished temporary galleries that were created just for this category
+    const unpublishedGalleries = await db.gallery.findMany({
+      where: {
+        published: false,
+        title: { contains: `Category: ${categoryToDelete}` }
+      },
+      select: { id: true }
+    })
+
+    if (unpublishedGalleries.length > 0) {
       await db.gallery.deleteMany({
         where: {
-          id: { in: deletedIds }
+          id: { in: unpublishedGalleries.map(g => g.id) }
         }
       })
     }
 
+    console.log(`✅ Category "${categoryToDelete}" removed from ${galleriesUpdated} galleries, ${imagesUpdated} images, and ${portfoliosUpdated} portfolios`)
+
     return NextResponse.json({
       success: true,
-      message: "Category removed successfully",
-      deletedCount: deletedIds.length
+      message: `Category "${categoryToDelete}" removed successfully from all locations`,
+      details: {
+        galleries: galleriesUpdated,
+        images: imagesUpdated,
+        portfolios: portfoliosUpdated,
+        total: galleriesUpdated + imagesUpdated + portfoliosUpdated
+      }
     })
   } catch (error) {
     console.error("Error removing category:", error)
