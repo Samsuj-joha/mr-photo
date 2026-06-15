@@ -48,11 +48,17 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           
-      - name: Install production dependencies
+      - name: Prepare production dependencies
         run: |
           cd ${{ env.LOCAL_APP_DIR }}
-          rm -rf node_modules
-          npm ci --production --ignore-scripts
+          # Note: We keep devDependencies because Next.js 15 requires TypeScript
+          # at runtime to load next.config.ts (even though we use next.config.js).
+          # Next.js will try to load TypeScript config files first, and without
+          # TypeScript installed, it will attempt to install it at runtime,
+          # causing deployment delays and warnings.
+          # Since the build is already complete, keeping all dependencies
+          # doesn't affect bundle size but ensures runtime compatibility.
+          echo "Keeping all dependencies for Next.js runtime compatibility"
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 

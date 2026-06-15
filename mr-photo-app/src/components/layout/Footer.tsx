@@ -388,8 +388,8 @@ export function Footer() {
               </Link>
               
               <p className="text-muted-foreground text-sm leading-relaxed">
-                Professional photographer specializing in weddings, portraits, and events. 
-                Creating timeless memories through the art of photography.
+                Professional photographer specializing in Birds, Wildlife & Landscape.
+                Capturing the raw beauty of nature through patience, light, and the art of photography.
               </p>
               
               {/* Contact Info */}
@@ -401,8 +401,8 @@ export function Footer() {
                 <div className="flex items-start space-x-3 text-sm text-muted-foreground">
                   <MapPin className="h-4 w-4 mt-0.5" />
                   <div>
-                    <div>Professional Photography Studio</div>
-                    <div>Dhaka, Bangladesh</div>
+                    <div>Paragon House, 5, C/A</div>
+                    <div>Bir Uttam AK Khandakar Rd, Dhaka 1212</div>
                   </div>
                 </div>
               </div>

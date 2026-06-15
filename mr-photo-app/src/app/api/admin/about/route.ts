@@ -19,7 +19,7 @@ export async function GET() {
       return NextResponse.json({
         id: null,
         name: "MR Photography",
-        description: "Professional photographer specializing in capturing life's most precious moments with artistic vision and technical excellence.",
+        description: "Professional photographer specializing in Birds, Wildlife & Landscape, capturing the raw beauty of nature with artistic vision and technical excellence.",
         profileImage: null,
         profileImagePublicId: null,
         journeyTitle: "My Photography Journey",

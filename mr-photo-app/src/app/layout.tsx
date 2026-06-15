@@ -15,8 +15,8 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://mr-photography.com'),
   title: 'mr-photos',
-  description: 'Capturing life\'s precious moments through professional photography. Wedding, portrait, and event photography services.',
-  keywords: 'photography, wedding photography, portrait photography, professional photographer, New York photographer',
+  description: 'Professional photographer specializing in Birds, Wildlife & Landscape. Capturing the raw beauty of nature through stunning imagery.',
+  keywords: 'bird photography, wildlife photography, landscape photography, nature photographer, professional photographer',
   authors: [{ name: 'Michael Rodriguez' }],
   creator: 'MR Photography',
   publisher: 'MR Photography',
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: 'mr-photos',
-    description: 'Professional photographer specializing in weddings, portraits, and events. Creating timeless memories through beautiful imagery.',
+    description: 'Professional photographer specializing in Birds, Wildlife & Landscape. Capturing the raw beauty of nature through stunning imagery.',
     url: 'https://mr-photography.com',
     siteName: 'MR Photography',
     images: [
@@ -45,8 +45,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'MR-PHOTOGRAPHY - Professional Photography Portfolio',
-    description: 'Professional photographer specializing in weddings, portraits, and events.',
+    title: 'MR-PHOTOGRAPHY - Birds, Wildlife & Landscape Portfolio',
+    description: 'Professional photographer specializing in Birds, Wildlife & Landscape.',
     images: ['/og-image.jpg'],
   },
   robots: {

@@ -28,7 +28,7 @@ export async function GET() {
         phoneDescription: "Mon-Fri 9AM-6PM BST",
         email: "info@paragongroup-bd.com",
         emailDescription: "We'll respond within 24 hours",
-        location: "Paragon House 5, C/A Bir Uttam AK Khandakar Rd, Mohakhali",
+        location: "Paragon House, 5, C/A Bir Uttam AK Khandakar Rd",
         locationDescription: "Dhaka 1212, Bangladesh",
         responseTime: "24 Hours",
         responseTimeDescription: "Typical response time",
